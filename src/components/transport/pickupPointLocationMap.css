@@ -1,0 +1,19 @@
+.pickup-stop-marker-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+.pickup-stop-marker {
+  font-size: 1.75rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.35));
+  transform: translate(-2px, -4px);
+}
+
+.pickup-stop-marker--pickup {
+  filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.35)) hue-rotate(-35deg) saturate(1.4);
+}
+
+.pickup-stop-marker--dropoff {
+  filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.35)) hue-rotate(145deg) saturate(1.3);
+}

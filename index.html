@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        var API = '__SM_API_BASE__'
+        function secureAssetUrl(url) {
+          if (!url) return url
+          if (/^http:\/\//i.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url)) {
+            if (location.protocol === 'https:') return url.replace(/^http:/i, 'https:')
+          }
+          return url
+        }
+        function mapIdentity(data) {
+          if (!data || typeof data !== 'object') return null
+          var raw = data.data || data.identity || data
+          if (!raw || typeof raw !== 'object') return null
+          var siteName = String(raw.siteName || raw.site_name || '').trim()
+          var favicon = String(raw.faviconUrl || raw.favicon_url || '').trim()
+          if (favicon && !/^https?:\/\//i.test(favicon) && favicon.charAt(0) === '/') {
+            favicon = API + favicon
+          }
+          favicon = secureAssetUrl(favicon)
+          if (!siteName && !favicon) return null
+          return { siteName: siteName, faviconUrl: favicon }
+        }
+        function applyIdentity(identity) {
+          if (!identity) return
+          if (identity.siteName) {
+            document.title = identity.siteName
+            var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+            if (appleTitle) appleTitle.setAttribute('content', identity.siteName)
+            var appName = document.querySelector('meta[name="application-name"]')
+            if (appName) appName.setAttribute('content', identity.siteName)
+          }
+          if (identity.faviconUrl) {
+            var icon = document.querySelector('link[rel="icon"]')
+            if (!icon) {
+              icon = document.createElement('link')
+              icon.rel = 'icon'
+              document.head.appendChild(icon)
+            }
+            icon.href = identity.faviconUrl
+            if (identity.faviconUrl.slice(-4) === '.svg') icon.type = 'image/svg+xml'
+            else icon.removeAttribute('type')
+            var appleIcon = document.querySelector('link[rel="apple-touch-icon"]')
+            if (!appleIcon) {
+              appleIcon = document.createElement('link')
+              appleIcon.rel = 'apple-touch-icon'
+              document.head.appendChild(appleIcon)
+            }
+            appleIcon.href = identity.faviconUrl
+          }
+        }
+        window.__SM_SITE_IDENTITY_BOOT__ = fetch(API + '/api/site-identity', {
+          headers: { Accept: 'application/json', 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+          cache: 'no-store',
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              var identity = mapIdentity(data)
+              applyIdentity(identity)
+              return { ok: res.ok, data: data, status: res.status }
+            })
+          })
+          .catch(function () {
+            return { ok: false, data: null, status: 0 }
+          })
+      })()
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="" />
+    <meta name="application-name" content="" />
+    <meta name="format-detection" content="telephone=no" />
+    <title></title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

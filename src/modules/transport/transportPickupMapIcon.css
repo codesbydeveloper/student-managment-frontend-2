@@ -1,0 +1,15 @@
+.scs-leaflet-pickup-div-icon {
+  background: transparent;
+  border: none;
+}
+
+.scs-leaflet-pickup-marker__emoji {
+  font-size: 1.75rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.35));
+  transform: translateY(-2px);
+}
+
+.scs-leaflet-pickup-div-icon--arrived .scs-leaflet-pickup-marker__emoji {
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.65));
+}
