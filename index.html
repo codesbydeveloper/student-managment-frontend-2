@@ -25,6 +25,42 @@
           if (!siteName && !favicon) return null
           return { siteName: siteName, faviconUrl: favicon }
         }
+        function applyManifest(identity) {
+          if (!identity || !identity.siteName) return
+          var name = identity.siteName
+          var shortName = name.length > 12 ? name.slice(0, 12).trim() : name
+          var icon = identity.faviconUrl || '/favicon.svg'
+          if (icon.indexOf('data:') === 0) icon = '/favicon.svg'
+          else if (icon.charAt(0) === '/' && icon.indexOf('http') !== 0) {
+            icon = (location.origin || '') + icon
+          }
+          var iconType = icon.slice(-4) === '.svg' ? 'image/svg+xml' : 'image/png'
+          var manifest = {
+            id: '/',
+            name: name,
+            short_name: shortName || name,
+            description: name + ' workspace.',
+            theme_color: '#0f172a',
+            background_color: '#020617',
+            display: 'standalone',
+            start_url: '/',
+            scope: '/',
+            lang: 'en',
+            icons: [
+              { src: icon, sizes: '512x512', type: iconType, purpose: 'any' },
+              { src: icon, sizes: '512x512', type: iconType, purpose: 'maskable' },
+            ],
+          }
+          var blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' })
+          var url = URL.createObjectURL(blob)
+          var manifestLink = document.querySelector('link[rel="manifest"]')
+          if (!manifestLink) {
+            manifestLink = document.createElement('link')
+            manifestLink.rel = 'manifest'
+            document.head.appendChild(manifestLink)
+          }
+          manifestLink.href = url
+        }
         function applyIdentity(identity) {
           if (!identity) return
           if (identity.siteName) {
@@ -52,6 +88,7 @@
             }
             appleIcon.href = identity.faviconUrl
           }
+          applyManifest(identity)
         }
         window.__SM_SITE_IDENTITY_BOOT__ = fetch(API + '/api/site-identity', {
           headers: { Accept: 'application/json', 'Cache-Control': 'no-cache', Pragma: 'no-cache' },

@@ -6,8 +6,8 @@ const tileClass =
 
 function TileBody({ navKey, groupKey, label, value, hint, children }) {
   return (
-    <div className="flex items-start gap-3">
-      <NavIconTile navKey={navKey} groupKey={groupKey} size="md" />
+    <div className="flex items-start gap-4">
+      <NavIconTile navKey={navKey} groupKey={groupKey} size="lg" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-600">{label}</p>
         {value != null && value !== '' ? (
@@ -66,7 +66,7 @@ export function DashboardStatTile({
 export function DashboardSectionTitle({ id, children, navKey, groupKey }) {
   return (
     <h2 id={id} className="flex items-center gap-2.5 text-base font-semibold text-slate-900">
-      {navKey || groupKey ? <NavIconTile navKey={navKey} groupKey={groupKey} size="md" /> : null}
+      {navKey || groupKey ? <NavIconTile navKey={navKey} groupKey={groupKey} size="lg" /> : null}
       <span>{children}</span>
     </h2>
   )
@@ -76,7 +76,7 @@ export function DashboardCardHeading({ title, navKey, groupKey, action }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <h2 className="flex min-w-0 items-center gap-2.5 text-lg font-bold text-slate-900">
-        {navKey || groupKey ? <NavIconTile navKey={navKey} groupKey={groupKey} size="md" /> : null}
+        {navKey || groupKey ? <NavIconTile navKey={navKey} groupKey={groupKey} size="lg" /> : null}
         <span className="truncate">{title}</span>
       </h2>
       {action}

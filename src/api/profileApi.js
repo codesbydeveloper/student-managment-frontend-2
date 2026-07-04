@@ -57,6 +57,9 @@ export function normalizeProfile(data) {
     menuAccess: parseMenuAccessFromApi(
       raw.menuAccess ?? raw.menu_permissions ?? raw.menuPermissions ?? data.menuAccess,
     ),
+    fatherName: String(raw.fatherName ?? raw.father_name ?? '').trim(),
+    motherName: String(raw.motherName ?? raw.mother_name ?? '').trim(),
+    guardianName: String(raw.guardianName ?? raw.guardian_name ?? '').trim(),
   }
 }
 

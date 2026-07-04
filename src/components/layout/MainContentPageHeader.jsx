@@ -12,7 +12,7 @@ export function MainContentPageHeader() {
 
   return (
     <header className="mb-5 flex items-center gap-3">
-      <NavIconTile navKey={ctx.navKey} groupKey={ctx.groupKey} size="md" />
+      <NavIconTile navKey={ctx.navKey} groupKey={ctx.groupKey} size="lg" />
       <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{ctx.label}</h1>
     </header>
   )

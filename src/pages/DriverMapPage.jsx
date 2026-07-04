@@ -20,6 +20,7 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { Modal } from '../components/Modal'
 import { Button } from '../components/ui/Button'
 import { LiveTripMap } from '../components/transport/LiveTripMap'
+import { DriverKeepAwakeToggle } from '../components/driver/DriverKeepAwakeToggle'
 import { useDriverTripState } from '../modules/transport/useDriverTripState'
 import {
   clearDriverBackendTrip,
@@ -808,7 +809,7 @@ export default function DriverMapPage() {
               {plateContractIssue ? (
                 <p className="mt-2 text-xs text-amber-800">{plateContractIssue}</p>
               ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 {!trip?.active ? (
                   <Button
                     type="button"
@@ -823,6 +824,7 @@ export default function DriverMapPage() {
                     End trip
                   </Button>
                 )}
+                <DriverKeepAwakeToggle />
                 {tripId ? (
                   <Button
                     type="button"

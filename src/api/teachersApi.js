@@ -317,7 +317,9 @@ export function normalizeTeacherDashboardPayload(raw) {
       ? d.recentPtm
       : Array.isArray(d.ptmRequests)
         ? d.ptmRequests
-        : []
+        : Array.isArray(d.recent_ptm_requests)
+          ? d.recent_ptm_requests
+          : []
 
   return {
     assignedClassesCount: firstFiniteNumber(

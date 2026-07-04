@@ -40,7 +40,7 @@ export const OPERATIONS_NAV_KEYS = [
 ]
 
 
-export const PTM_NAV_KEYS = ['staff_ptm_requests', 'staff_ptm_history']
+export const PTM_NAV_KEYS = ['staff_ptm_requests', 'staff_ptm_upcoming', 'staff_ptm_history']
 
 
 export const TEACHER_ACADEMICS_NAV_KEYS = ['classes', 'teachers', 'students']
@@ -139,6 +139,7 @@ const items = [
   { key: 'admin_visitor_logs', to: '/visitor-logs', label: 'Visitor log' },
   { key: 'admin_leads', to: '/leads', label: 'Leads (CRM)' },
   { key: 'staff_ptm_requests', to: '/ptm-requests/staff', label: 'PTM request' },
+  { key: 'staff_ptm_upcoming', to: '/ptm-requests/admin/upcoming', label: 'Upcoming meetings' },
   { key: 'staff_ptm_history', to: '/ptm-requests/admin/history', label: 'PTM history' },
 ]
 
@@ -416,6 +417,7 @@ const PATH_NAV_EXTRAS = [
   { prefix: '/leads', navKey: 'admin_leads', label: 'Leads' },
   { prefix: '/create-lead', navKey: 'create_lead', label: 'Create lead' },
   { prefix: '/assigned-leads', navKey: 'teacher_assigned_leads', label: 'Assigned leads' },
+  { prefix: '/ptm-requests/admin/upcoming', navKey: 'staff_ptm_upcoming', label: 'Upcoming meetings' },
   { prefix: '/settings/login-branding', navKey: 'admins', label: 'Login branding' },
   { prefix: '/settings/smtp', navKey: 'admins', label: 'SMTP settings' },
   { prefix: '/settings', navKey: 'admins', label: 'Settings' },
@@ -527,6 +529,7 @@ export function navLinkUsesEnd(to) {
     to === '/leads' ||
     to === '/ptm-requests' ||
     to === '/ptm-requests/staff' ||
+    to === '/ptm-requests/admin/upcoming' ||
     to === '/ptm-requests/admin/history' ||
     to === '/notifications/history' ||
     to === '/assigned-leads' ||

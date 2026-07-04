@@ -33,6 +33,54 @@ import { formatActivityTimestamp } from '../../utils/lastActivityDisplay'
 const PARENT_PAGE_LIMIT = 10
 const LOCAL_PARENT_PAGE_SIZE = 5
 
+const EMPTY_PARENT_FORM = {
+  fullName: '',
+  fatherName: '',
+  fatherPhone: '',
+  motherName: '',
+  motherPhone: '',
+  guardianName: '',
+  guardianPhone: '',
+  email: '',
+  phone: '',
+  password: '',
+  studentIds: [],
+  active: true,
+}
+
+function parentFormFromRow(row) {
+  if (!row) return { ...EMPTY_PARENT_FORM }
+  return {
+    fullName: row.fullName || '',
+    fatherName: row.fatherName || '',
+    fatherPhone: sanitizePhoneDigits(row.fatherPhone),
+    motherName: row.motherName || '',
+    motherPhone: sanitizePhoneDigits(row.motherPhone),
+    guardianName: row.guardianName || '',
+    guardianPhone: sanitizePhoneDigits(row.guardianPhone),
+    email: row.email || row.primaryEmail || '',
+    phone: sanitizePhoneDigits(row.phone || row.primaryPhone),
+    password: '',
+    studentIds: [...(row.studentIds || [])],
+    active: row.active !== false,
+  }
+}
+
+function parentExtendedFormPayload(form) {
+  return {
+    fatherName: form.fatherName.trim(),
+    fatherPhone: sanitizePhoneDigits(form.fatherPhone),
+    motherName: form.motherName.trim(),
+    motherPhone: sanitizePhoneDigits(form.motherPhone),
+    guardianName: form.guardianName.trim(),
+    guardianPhone: sanitizePhoneDigits(form.guardianPhone),
+    primaryPhone: sanitizePhoneDigits(form.phone),
+    secondaryPhone: '',
+    primaryEmail: form.email.trim().toLowerCase(),
+    secondaryEmail: '',
+  }
+}
+
 function pickCsvField(row, keys) {
   for (const k of keys) {
     const v = row[k]
@@ -157,14 +205,7 @@ export function ParentsModule() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    password: '',
-    studentIds: [],
-    active: true,
-  })
+  const [form, setForm] = useState({ ...EMPTY_PARENT_FORM })
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
   const [deletingParentId, setDeletingParentId] = useState(null)
@@ -568,35 +609,28 @@ export function ParentsModule() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ fullName: '', email: '', phone: '', password: '', studentIds: [], active: true })
+    setForm({ ...EMPTY_PARENT_FORM })
     setErrors({})
     setModalOpen(true)
   }
 
   const openEdit = (row) => {
     setEditing(row)
-    setForm({
-      fullName: row.fullName,
-      email: row.email,
-      phone: sanitizePhoneDigits(row.phone),
-      password: '',
-      studentIds: [...row.studentIds],
-      active: row.active !== false,
-    })
+    setForm(parentFormFromRow(row))
     setErrors({})
     setModalOpen(true)
   }
 
   const save = async () => {
     const e1 = required(form.fullName, 'Full name')
-    const e2 = required(form.email, 'Email') || email(form.email)
+    const e2 = required(form.email, 'Primary email') || email(form.email)
     const ePass =
       !editing && (required(form.password, 'Password') || minLength(form.password, 6, 'Password'))
     const ePassEdit =
       editing &&
       form.password.trim() &&
       minLength(form.password, 6, 'Password')
-    const ePhone = phone10Digits(form.phone, 'Phone', { required: false })
+    const ePhone = phone10Digits(form.phone, 'Primary phone number', { required: true })
     const ePassword = ePass || ePassEdit
     setErrors({ fullName: e1, email: e2, phone: ePhone, password: ePassword })
     if (e1 || e2 || ePhone || ePassword) return
@@ -616,6 +650,7 @@ export function ParentsModule() {
             active: form.active,
             studentIds: nextIds,
             password: form.password.trim(),
+            ...parentExtendedFormPayload(form),
           })
           if (!res.ok) {
             toast.error(res.error)
@@ -635,6 +670,7 @@ export function ParentsModule() {
                 phone: sanitizePhoneDigits(form.phone),
                 studentIds: nextIds,
                 active: form.active,
+                ...parentExtendedFormPayload(form),
                 ...pwdPatch,
               }
             : p,
@@ -661,6 +697,7 @@ export function ParentsModule() {
           phone: sanitizePhoneDigits(form.phone),
           password: form.password.trim(),
           studentIds: nextIds,
+          ...parentExtendedFormPayload(form),
         })
         if (!res.ok) {
           toast.error(res.error)
@@ -683,6 +720,7 @@ export function ParentsModule() {
             Array.isArray(mapped.studentIds) && mapped.studentIds.length > 0
               ? mapped.studentIds
               : nextIds,
+          ...parentExtendedFormPayload(form),
         }
         setStudents((prev) => applyChildLinks(id, nextIds, [], prev))
         if (remoteParents !== undefined) {
@@ -714,6 +752,7 @@ export function ParentsModule() {
           password: form.password.trim(),
           studentIds: nextIds,
           active: true,
+          ...parentExtendedFormPayload(form),
         },
       ]
       return stripLinkedStudentsFromOthers(withNew, id, nextIds)
@@ -1196,7 +1235,7 @@ export function ParentsModule() {
             {errors.fullName ? <p className="mt-1 text-xs text-red-600">{errors.fullName}</p> : null}
           </div>
           <div>
-            <Label htmlFor="pa-email" required>Email</Label>
+            <Label htmlFor="pa-email" required>Primary email</Label>
             <Input
               id="pa-email"
               type="email"
@@ -1208,7 +1247,7 @@ export function ParentsModule() {
             {errors.email ? <p className="mt-1 text-xs text-red-600">{errors.email}</p> : null}
           </div>
           <div>
-            <Label htmlFor="pa-phone">Phone</Label>
+            <Label htmlFor="pa-phone" required>Primary phone number</Label>
             <PhoneInput
               id="pa-phone"
               value={form.phone}
@@ -1235,10 +1274,64 @@ export function ParentsModule() {
               <p className="mt-1.5 text-xs text-slate-500">
                 {editing
                   ? 'Leave blank to keep the existing password. Parents use this with their email to sign in.'
-                  : 'Used with their email to sign in to the parent portal (mock app — stored in this browser).'}
+                  : ''}
               </p>
             </div>
           ) : null}
+          <div>
+            <Label htmlFor="pa-father-name">Father name</Label>
+            <Input
+              id="pa-father-name"
+              value={form.fatherName}
+              disabled={!manage}
+              onChange={(e) => setForm((f) => ({ ...f, fatherName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa-father-phone">Father phone</Label>
+            <PhoneInput
+              id="pa-father-phone"
+              value={form.fatherPhone}
+              disabled={!manage}
+              onChange={(e) => setForm((f) => ({ ...f, fatherPhone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa-mother-name">Mother name</Label>
+            <Input
+              id="pa-mother-name"
+              value={form.motherName}
+              disabled={!manage}
+              onChange={(e) => setForm((f) => ({ ...f, motherName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa-mother-phone">Mother phone</Label>
+            <PhoneInput
+              id="pa-mother-phone"
+              value={form.motherPhone}
+              disabled={!manage}
+              onChange={(e) => setForm((f) => ({ ...f, motherPhone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa-guardian-name">Guardian name</Label>
+            <Input
+              id="pa-guardian-name"
+              value={form.guardianName}
+              disabled={!manage}
+              onChange={(e) => setForm((f) => ({ ...f, guardianName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa-guardian-phone">Guardian phone</Label>
+            <PhoneInput
+              id="pa-guardian-phone"
+              value={form.guardianPhone}
+              disabled={!manage}
+              onChange={(e) => setForm((f) => ({ ...f, guardianPhone: e.target.value }))}
+            />
+          </div>
           <div className="sm:col-span-2 flex items-center gap-3">
             <input
               id="pa-active"

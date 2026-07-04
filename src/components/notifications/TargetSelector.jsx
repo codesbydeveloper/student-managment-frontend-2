@@ -56,6 +56,7 @@ export function TargetSelector({ targetType, value, onChange, disabled, classes,
           value={value}
           onChange={onChange}
           disabled={disabled}
+          showSelectAll
           searchPlaceholder="Search classes…"
           emptyText="No classes found."
           collapsedHint="Select one or more classes…"
@@ -75,6 +76,7 @@ export function TargetSelector({ targetType, value, onChange, disabled, classes,
           value={value}
           onChange={onChange}
           disabled={disabled}
+          showSelectAll
           searchPlaceholder="Search sections…"
           emptyText="No sections found."
           collapsedHint="Select one or more sections…"
@@ -94,6 +96,7 @@ export function TargetSelector({ targetType, value, onChange, disabled, classes,
           value={value}
           onChange={onChange}
           disabled={disabled}
+          showSelectAll
           searchPlaceholder="Search students…"
           emptyText="No students found."
           collapsedHint="Select one or more students…"

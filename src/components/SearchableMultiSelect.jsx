@@ -21,6 +21,8 @@ export function SearchableMultiSelect({
   onSearchQueryChange,
   onOpenChange,
   required = false,
+  /** When true, shows a “Select all” row for the current filtered options. */
+  showSelectAll = false,
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -79,6 +81,20 @@ export function SearchableMultiSelect({
     onChange(has ? value.filter((x) => x !== val) : [...value, val])
   }
 
+  const filteredValues = useMemo(() => filtered.map((o) => o.value), [filtered])
+  const allFilteredSelected =
+    filteredValues.length > 0 && filteredValues.every((v) => value.includes(v))
+
+  const toggleSelectAll = () => {
+    if (disabled || !filteredValues.length) return
+    if (allFilteredSelected) {
+      const filteredSet = new Set(filteredValues)
+      onChange(value.filter((v) => !filteredSet.has(v)))
+      return
+    }
+    onChange([...new Set([...value, ...filteredValues])])
+  }
+
   const closePanel = () => {
     setOpen(false)
     setQuery('')
@@ -127,7 +143,7 @@ export function SearchableMultiSelect({
           className="flex max-h-[min(50vh,22rem)] w-full flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-lg ring-1 ring-slate-900/[0.04]"
           onWheel={(e) => e.stopPropagation()}
         >
-          <div className="shrink-0 border-b border-slate-100 p-2">
+          <div className="shrink-0 border-b border-slate-100 p-3">
             <Input
               id={id ? `${id}-search` : undefined}
               value={query}
@@ -139,6 +155,7 @@ export function SearchableMultiSelect({
               placeholder={searchPlaceholder}
               autoComplete="off"
               aria-label={searchPlaceholder}
+              className="min-h-[2.75rem] px-3.5 py-3 text-base"
             />
           </div>
           <div
@@ -153,6 +170,24 @@ export function SearchableMultiSelect({
               <p className="py-8 text-center text-sm font-medium text-slate-500">{emptyText}</p>
             ) : (
               <ul className="space-y-0.5">
+                {showSelectAll ? (
+                  <li className="mb-1 border-b border-slate-100 pb-1">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-sm font-semibold transition hover:bg-indigo-50/60">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAll}
+                      />
+                      <span className="text-slate-800">
+                        Select all
+                        {query.trim() && filtered.length !== options.length
+                          ? ` (${filtered.length} shown)`
+                          : ''}
+                      </span>
+                    </label>
+                  </li>
+                ) : null}
                 {filtered.map((o) => {
                   const checked = value.includes(o.value)
                   return (

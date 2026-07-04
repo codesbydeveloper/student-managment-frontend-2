@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useAsyncLoader } from '../../hooks/useAsyncLoader'
-import { Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAuth } from '../../context/AuthContext'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { ListPagination } from '../../components/ui/ListPagination'
 import { Button } from '../../components/ui/Button'
+import { DateTimeInput } from '../../components/ui/DateTimeInput'
 import { PtmRequestDetailModal } from '../../components/ptm/PtmRequestDetailModal'
 import { PtmRequestsTable } from '../../components/ptm/PtmRequestsTable'
+import { StaffPtmNav } from '../../components/ptm/StaffPtmNav'
 import { PTM_STATUS } from '../../data/phase6Constants'
 import {
   fetchStaffPendingPtmRequests,
@@ -155,29 +156,13 @@ export default function StaffPtmRequestsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        <Link to="/dashboard">
-          <Button type="button" size="sm" variant="secondary">
-            Dashboard
-          </Button>
-        </Link>
-        <Link to="/ptm-requests/admin/history">
-          <Button type="button" size="sm" variant="secondary">
-            PTM history
-          </Button>
-        </Link>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => {
-            setApiRows(null)
-            void load()
-          }}
-        >
-          Refresh
-        </Button>
-      </div>
+      <StaffPtmNav
+        onRefresh={() => {
+          setApiRows(null)
+          void load()
+        }}
+        refreshDisabled={apiRows === null}
+      />
 
       <Card>
         <CardHeader title="PTM requests" />
@@ -233,12 +218,11 @@ export default function StaffPtmRequestsPage() {
               <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 Meeting time (required to approve)
               </label>
-              <input
-                type="datetime-local"
+              <DateTimeInput
                 value={meetingLocal[viewRow.id] || ''}
                 onChange={(e) => setMeetingLocal((m) => ({ ...m, [viewRow.id]: e.target.value }))}
                 disabled={isBusy}
-                className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm disabled:opacity-60"
+                className="mt-1 rounded-xl disabled:opacity-60"
               />
               <label className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 Optional meeting note

@@ -132,11 +132,26 @@ export async function handlePushNotificationYes() {
   return result
 }
 
+let lastWebpushrAttributesKey = ''
+
+function syncWebpushrUserAttributes({ userId, email } = {}) {
+  const id = String(userId ?? '').trim()
+  if (!id) return
+  const em = String(email ?? '').trim().toLowerCase()
+  const key = `${id}|${em}`
+  if (key === lastWebpushrAttributesKey) return
+  lastWebpushrAttributesKey = key
+  const attrs = { userId: id }
+  if (em) attrs.email = em
+  queueWebpushr('attributes', attrs)
+}
+
 /**
  * Load Webpushr SDK for push subscription. UI is our in-app banner, not Webpushr’s popup.
  * When the app PWA service worker is active, skip registering a second worker at `/` (tablet crash fix).
+ * @param {{ userId?: string | number, email?: string }} [user]
  */
-export async function enableWebpushrForUser() {
+export async function enableWebpushrForUser(user) {
   if (typeof document === 'undefined') return
   if (!shouldLoadWebpushr()) return
   document.body.classList.remove(DRIVER_WEBPUSHR_BODY_CLASS)
@@ -152,6 +167,8 @@ export async function enableWebpushrForUser() {
     setupDone = true
   }
 
+  syncWebpushrUserAttributes(user)
+
   void (async () => {
     if (getNotificationPermission() !== 'granted' || !hasStoredPushEndpoint()) return
     if (!(await hasActiveWebpushrServiceWorker())) return
@@ -161,6 +178,7 @@ export async function enableWebpushrForUser() {
 
 export function disableWebpushrForDriver() {
   if (typeof document === 'undefined') return
+  lastWebpushrAttributesKey = ''
   document.body.classList.add(DRIVER_WEBPUSHR_BODY_CLASS)
 }
 

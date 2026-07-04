@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
+import { markBellNotificationRead } from '../api/notificationsApi'
 import { fetchParentMessageById, markParentMessageRead } from '../api/parentsApi'
 import { requestParentMessagesRefresh } from '../utils/parentMessagesRefreshBus'
+import { requestNotificationBellRefresh } from '../utils/notificationBellRefreshBus'
 
 
 export function useParentMessageViewer(token) {
@@ -56,6 +58,12 @@ export function useParentMessageViewer(token) {
         requestParentMessagesRefresh()
       } else {
         toast.error(readRes.error || 'Could not mark message as read.')
+      }
+
+      const bellRes = await markBellNotificationRead(token, id)
+      if (seq !== viewFetchSeq.current) return
+      if (bellRes.ok) {
+        requestNotificationBellRefresh({ notificationId: id })
       }
     },
     [token],

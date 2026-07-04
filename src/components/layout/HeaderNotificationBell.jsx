@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAsyncLoader } from '../../hooks/useAsyncLoader'
 import { Link, useNavigate } from 'react-router-dom'
-import { BELL_PANEL_DEFAULT_LIMIT, fetchNotificationBell } from '../../api/notificationsApi'
+import {
+  BELL_PANEL_DEFAULT_LIMIT,
+  fetchNotificationBell,
+} from '../../api/notificationsApi'
 import { markParentBusLiveAlertsRead } from '../../api/parentsApi'
 import { useAuth } from '../../context/AuthContext'
 import { ROLES } from '../../utils/constants'
+import { onNotificationBellRefreshRequested } from '../../utils/notificationBellRefreshBus'
 import { BellIcon } from '../icons/BellIcon'
 import {
   getHeaderNotificationItemLink,
@@ -38,6 +42,15 @@ export function HeaderNotificationBell() {
 
   const prevOpenRef = useRef(false)
 
+  const removeBellItem = useCallback((predicate) => {
+    setItems((prev) => {
+      const next = prev.filter((n) => !predicate(n))
+      const removed = prev.length - next.length
+      if (removed > 0) setUnreadCount((c) => Math.max(0, c - removed))
+      return next
+    })
+  }, [])
+
   const loadBell = useAsyncLoader(async () => {
     if (!token) {
       setItems([])
@@ -49,7 +62,7 @@ export function HeaderNotificationBell() {
     const res = await fetchNotificationBell(token, { limit: BELL_PANEL_DEFAULT_LIMIT })
     setLoading(false)
     if (res.ok) {
-      setItems(res.notifications)
+      setItems(res.notifications.filter((n) => n.isRead !== true && n.unread !== false))
       setUnreadCount(res.unreadCount)
       setError('')
     } else {
@@ -60,11 +73,26 @@ export function HeaderNotificationBell() {
   }, [token])
 
   useEffect(() => {
-    if (open && !prevOpenRef.current) {
-      void loadBell()
-    }
+    if (open && !prevOpenRef.current) void loadBell()
     prevOpenRef.current = open
   }, [open, loadBell])
+
+  useEffect(() => {
+    if (!token) return undefined
+    return onNotificationBellRefreshRequested((detail) => {
+      const notificationId = detail?.notificationId != null ? String(detail.notificationId) : ''
+      const ptmRequestId = detail?.ptmRequestId != null ? String(detail.ptmRequestId) : ''
+      if (notificationId || ptmRequestId) {
+        removeBellItem((n) => {
+          if (notificationId && String(n.id) === notificationId) return true
+          if (ptmRequestId && String(n.ptmRequestId ?? '') === ptmRequestId) return true
+          return false
+        })
+      } else {
+        void loadBell()
+      }
+    })
+  }, [token, loadBell, removeBellItem])
 
   const close = useCallback(() => setOpen(false), [])
 
@@ -86,6 +114,14 @@ export function HeaderNotificationBell() {
     return () => document.removeEventListener('pointerdown', onPointer)
   }, [open, close])
 
+  const navigateBellLink = useCallback(
+    (link) => {
+      if (typeof link === 'string') navigate(link)
+      else navigate(link.pathname, { state: link.state })
+    },
+    [navigate],
+  )
+
   const onTransportNotificationClick = useCallback(
     async (item) => {
       const alertKey = item?.alertKey
@@ -96,18 +132,25 @@ export function HeaderNotificationBell() {
           alertKey,
           studentId: item.transport?.studentId,
         })
-        setItems((prev) => prev.filter((n) => n.alertKey !== alertKey && n.id !== item.id))
-        setUnreadCount((c) => Math.max(0, c - (item.unread ? 1 : 0)))
+        removeBellItem((n) => n.alertKey === alertKey || n.id === item.id)
         setDismissingKey('')
       }
       close()
       const link = getParentTransportTrackingLink(item.transport?.studentId)
       navigate(link.pathname, { state: link.state })
     },
-    [token, navigate, close, dismissingKey],
+    [token, navigate, close, dismissingKey, removeBellItem],
   )
 
-  const badgeCount = unreadCount > 0 ? unreadCount : items.filter((i) => i.unread).length
+  const onBellNotificationClick = useCallback(
+    (item) => {
+      close()
+      navigateBellLink(getHeaderNotificationItemLink(user?.role, item, user?.menuAccess))
+    },
+    [user?.role, user?.menuAccess, close, navigateBellLink],
+  )
+
+  const badgeCount = unreadCount > 0 ? unreadCount : items.filter((i) => i.unread !== false && !i.isRead).length
 
   return (
     <div ref={rootRef} className="relative">
@@ -188,13 +231,12 @@ export function HeaderNotificationBell() {
                       )
                     }
 
-                    const to = getHeaderNotificationItemLink(user?.role, item, user?.menuAccess)
                     return (
                       <li key={item.id}>
-                        <Link
-                          to={to}
-                          onClick={close}
-                          className={`block rounded-xl border px-3 py-2.5 text-left transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${
+                        <button
+                          type="button"
+                          onClick={() => onBellNotificationClick(item)}
+                          className={`block w-full rounded-xl border px-3 py-2.5 text-left transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${
                             item.unread
                               ? 'border-sky-200/90 bg-sky-50/40 hover:border-sky-300'
                               : 'border-sky-100/80 bg-white hover:border-sky-200'
@@ -204,7 +246,7 @@ export function HeaderNotificationBell() {
                           <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-600">
                             {item.message}
                           </p>
-                        </Link>
+                        </button>
                       </li>
                     )
                   })

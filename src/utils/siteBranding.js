@@ -65,7 +65,7 @@ export function resetSiteBranding() {
   return { ...memoryBranding }
 }
 
-/** Title + favicon only — manifest stays the static /manifest.webmanifest (tablet/PWA safe). */
+/** Title, favicon, and PWA install manifest from GET /api/site-identity. */
 export function applySiteBrandingToDocument(branding) {
   if (typeof document === 'undefined') return
   const b = normalizeSiteBranding(branding)
@@ -99,26 +99,69 @@ export function applySiteBrandingToDocument(branding) {
     document.head.appendChild(appleIcon)
   }
   appleIcon.href = b.faviconUrl
+
+  applyPwaManifestFromSiteBranding(b)
 }
 
-/** @deprecated Runtime data-URL manifests crash some tablet PWAs — use static manifest + meta tags. */
-export function applyPwaManifestFromSiteBranding(_branding) {
-  return Promise.resolve()
+let manifestBlobUrl = null
+
+function manifestIconSrc(faviconUrl) {
+  const sanitized = sanitizeFaviconUrl(faviconUrl) || DEFAULT_SITE_BRANDING.faviconUrl
+  if (sanitized.startsWith('data:')) return ''
+  if (/^https?:\/\//i.test(sanitized)) return upgradeInsecureAssetUrl(sanitized)
+  if (typeof window !== 'undefined' && sanitized.startsWith('/')) {
+    return `${window.location.origin}${sanitized}`
+  }
+  return sanitized
 }
 
-/** @deprecated */
-export function applyPwaManifestFromSiteBrandingAsync(_branding) {
-  return Promise.resolve()
-}
-
-/** @deprecated */
+/** PWA install name + icon — uses API siteName/faviconUrl (icon URL only, not data URLs). */
 export function buildPwaManifestFromSiteBranding(branding) {
   const b = normalizeSiteBranding(branding)
   const shortName = b.siteName.length > 12 ? b.siteName.slice(0, 12).trim() : b.siteName
+  const iconSrc = manifestIconSrc(b.faviconUrl) || `${typeof window !== 'undefined' ? window.location.origin : ''}/favicon.svg`
+  const iconType = iconSrc.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
   return {
+    id: '/',
     name: b.siteName,
     short_name: shortName || b.siteName,
+    description: `${b.siteName} workspace.`,
+    theme_color: '#0f172a',
+    background_color: '#020617',
+    display: 'standalone',
+    start_url: '/',
+    scope: '/',
+    lang: 'en',
+    icons: [
+      { src: iconSrc, sizes: '512x512', type: iconType, purpose: 'any' },
+      { src: iconSrc, sizes: '512x512', type: iconType, purpose: 'maskable' },
+    ],
   }
+}
+
+export function applyPwaManifestFromSiteBranding(branding) {
+  if (typeof document === 'undefined') return
+  const manifest = buildPwaManifestFromSiteBranding(branding)
+  if (manifestBlobUrl) {
+    URL.revokeObjectURL(manifestBlobUrl)
+    manifestBlobUrl = null
+  }
+  manifestBlobUrl = URL.createObjectURL(
+    new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }),
+  )
+  let manifestLink = document.querySelector('link[rel="manifest"]')
+  if (!manifestLink) {
+    manifestLink = document.createElement('link')
+    manifestLink.rel = 'manifest'
+    document.head.appendChild(manifestLink)
+  }
+  manifestLink.href = manifestBlobUrl
+}
+
+/** @deprecated Use applyPwaManifestFromSiteBranding */
+export function applyPwaManifestFromSiteBrandingAsync(branding) {
+  applyPwaManifestFromSiteBranding(branding)
+  return Promise.resolve()
 }
 
 export function subscribeSiteBranding(listener) {

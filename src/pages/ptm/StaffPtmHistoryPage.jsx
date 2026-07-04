@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useAsyncLoader } from '../../hooks/useAsyncLoader'
-import { Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAuth } from '../../context/AuthContext'
 import { Card, CardHeader } from '../../components/ui/Card'
@@ -8,6 +7,7 @@ import { ListPagination } from '../../components/ui/ListPagination'
 import { Button } from '../../components/ui/Button'
 import { PtmRequestDetailModal } from '../../components/ptm/PtmRequestDetailModal'
 import { PtmRequestsTable } from '../../components/ptm/PtmRequestsTable'
+import { StaffPtmNav } from '../../components/ptm/StaffPtmNav'
 import { fetchAdminAllPtmRequests } from '../../api/ptmApi'
 import { usePtmRequestViewer } from '../../hooks/usePtmRequestViewer'
 import { ROLES } from '../../utils/constants'
@@ -71,21 +71,7 @@ export default function StaffPtmHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        <Link to="/dashboard">
-          <Button type="button" size="sm" variant="secondary">
-            Dashboard
-          </Button>
-        </Link>
-        <Link to="/ptm-requests/staff">
-          <Button type="button" size="sm" variant="secondary">
-            Pending requests
-          </Button>
-        </Link>
-        <Button type="button" size="sm" variant="secondary" onClick={onRefresh}>
-          Refresh
-        </Button>
-      </div>
+      <StaffPtmNav onRefresh={onRefresh} refreshDisabled={apiRows === null} />
 
       <Card>
         <CardHeader title="PTM history" />

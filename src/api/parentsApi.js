@@ -135,6 +135,22 @@ function pickParentPayload(raw) {
   return o
 }
 
+/** Extended parent contact fields for POST/PATCH bodies. */
+function parentExtendedFieldsForApi(body) {
+  return {
+    fatherName: String(body.fatherName ?? '').trim(),
+    fatherPhone: String(body.fatherPhone ?? '').trim(),
+    motherName: String(body.motherName ?? '').trim(),
+    motherPhone: String(body.motherPhone ?? '').trim(),
+    guardianName: String(body.guardianName ?? '').trim(),
+    guardianPhone: String(body.guardianPhone ?? '').trim(),
+    primaryPhone: String(body.primaryPhone ?? '').trim(),
+    secondaryPhone: String(body.secondaryPhone ?? '').trim(),
+    primaryEmail: String(body.primaryEmail ?? '').trim().toLowerCase(),
+    secondaryEmail: String(body.secondaryEmail ?? '').trim().toLowerCase(),
+  }
+}
+
 /** Coerce student ids for PATCH/POST bodies (numeric when all digits). */
 function studentIdsForApi(ids) {
   if (!Array.isArray(ids)) return []
@@ -177,6 +193,16 @@ export function mapApiParentToRow(raw) {
     fullName: String(o.fullName ?? o.name ?? '').trim(),
     email: String(o.email ?? '').trim().toLowerCase(),
     phone: String(o.phone ?? '').trim(),
+    fatherName: String(o.fatherName ?? '').trim(),
+    fatherPhone: String(o.fatherPhone ?? '').trim(),
+    motherName: String(o.motherName ?? '').trim(),
+    motherPhone: String(o.motherPhone ?? '').trim(),
+    guardianName: String(o.guardianName ?? '').trim(),
+    guardianPhone: String(o.guardianPhone ?? '').trim(),
+    primaryPhone: String(o.primaryPhone ?? '').trim(),
+    secondaryPhone: String(o.secondaryPhone ?? '').trim(),
+    primaryEmail: String(o.primaryEmail ?? '').trim().toLowerCase(),
+    secondaryEmail: String(o.secondaryEmail ?? '').trim().toLowerCase(),
     password: o.password != null ? String(o.password) : '',
     studentIds,
     active,
@@ -311,6 +337,7 @@ export async function createParent(token, body) {
         phone: String(body.phone ?? '').trim(),
         password: body.password,
         studentIds: studentIdsForApi(body.studentIds ?? []),
+        ...parentExtendedFieldsForApi(body),
       }),
     })
     const data = await res.json().catch(() => null)
@@ -339,6 +366,7 @@ export async function updateParent(token, parentId, body) {
     phone: String(body.phone ?? '').trim(),
     isActive: Boolean(body.active),
     studentIds: studentIdsForApi(body.studentIds),
+    ...parentExtendedFieldsForApi(body),
   }
   const pwd = body.password != null ? String(body.password).trim() : ''
   if (pwd) payload.password = pwd

@@ -27,6 +27,7 @@ import { Modal } from '../../components/Modal'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { DateInput } from '../../components/ui/DateInput'
 import { Label } from '../../components/ui/Label'
 import { SearchableSingleSelect } from '../../components/SearchableSingleSelect'
 import { Select } from '../../components/ui/Select'
@@ -40,6 +41,37 @@ import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
 
 const STUDENT_PAGE_LIMIT = 10
 const LOCAL_STUDENT_PAGE_SIZE = 5
+
+const STUDENT_GENDER_OPTIONS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'third_gender', label: 'Third Gender' },
+]
+
+const EMPTY_STUDENT_FORM = {
+  fullName: '',
+  gender: '',
+  dateOfBirth: '',
+  bloodGroup: '',
+  studentAddress: '',
+  classId: '',
+  parentId: '',
+  active: true,
+}
+
+function studentFormFromRow(row) {
+  if (!row) return { ...EMPTY_STUDENT_FORM }
+  return {
+    fullName: row.fullName || '',
+    gender: row.gender || '',
+    dateOfBirth: row.dateOfBirth || row.dob || '',
+    bloodGroup: row.bloodGroup || '',
+    studentAddress: row.studentAddress || row.address || '',
+    classId: row.classId || '',
+    parentId: row.parentId || '',
+    active: row.active !== false,
+  }
+}
 
 /** Must match POST /api/students/import/csv column names. */
 const STUDENT_IMPORT_CSV_HEADERS = ['fullName', 'room', 'parentEmail', 'active']
@@ -309,12 +341,7 @@ export function StudentsModule() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({
-    fullName: '',
-    classId: '',
-    parentId: '',
-    active: true,
-  })
+  const [form, setForm] = useState({ ...EMPTY_STUDENT_FORM })
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
   const [deletingStudentId, setDeletingStudentId] = useState(null)
@@ -924,27 +951,32 @@ export function StudentsModule() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ fullName: '', classId: '', parentId: '', active: true })
+    setForm({ ...EMPTY_STUDENT_FORM })
     setErrors({})
     setModalOpen(true)
   }
 
   const openEdit = (row) => {
     setEditing(row)
-    setForm({
-      fullName: row.fullName,
-      classId: row.classId || '',
-      parentId: row.parentId || '',
-      active: row.active !== false,
-    })
+    setForm(studentFormFromRow(row))
     setErrors({})
     setModalOpen(true)
   }
 
   const save = async () => {
     const e1 = required(form.fullName, 'Full name')
-    setErrors({ fullName: e1, classId: '', parentId: '' })
-    if (e1) return
+    const eGender = required(form.gender, 'Gender')
+    const eDob = required(form.dateOfBirth, 'Date of birth')
+    setErrors({
+      fullName: e1,
+      gender: eGender,
+      dateOfBirth: eDob,
+      classId: '',
+      parentId: '',
+      bloodGroup: '',
+      studentAddress: '',
+    })
+    if (e1 || eGender || eDob) return
 
     if (editing) {
       const id = editing.id
@@ -957,6 +989,10 @@ export function StudentsModule() {
             classId: form.classId,
             parentId: form.parentId,
             active: form.active,
+            gender: form.gender,
+            dateOfBirth: form.dateOfBirth,
+            bloodGroup: form.bloodGroup.trim(),
+            studentAddress: form.studentAddress.trim(),
           })
           if (!res.ok) {
             toast.error(res.error)
@@ -972,6 +1008,10 @@ export function StudentsModule() {
             ? {
                 ...s,
                 fullName: form.fullName.trim(),
+                gender: form.gender,
+                dateOfBirth: form.dateOfBirth,
+                bloodGroup: form.bloodGroup.trim(),
+                studentAddress: form.studentAddress.trim(),
                 classId: form.classId || '',
                 parentId: form.parentId || '',
                 active: form.active,
@@ -996,6 +1036,10 @@ export function StudentsModule() {
           classId: form.classId,
           parentId: form.parentId,
           active: form.active,
+          gender: form.gender,
+          dateOfBirth: form.dateOfBirth,
+          bloodGroup: form.bloodGroup.trim(),
+          studentAddress: form.studentAddress.trim(),
         })
         if (!res.ok) {
           toast.error(res.error)
@@ -1034,6 +1078,10 @@ export function StudentsModule() {
       {
         id,
         fullName: form.fullName.trim(),
+        gender: form.gender,
+        dateOfBirth: form.dateOfBirth,
+        bloodGroup: form.bloodGroup.trim(),
+        studentAddress: form.studentAddress.trim(),
         classId: form.classId || '',
         parentId: form.parentId || '',
         active: form.active,
@@ -1639,6 +1687,70 @@ export function StudentsModule() {
               error={errors.fullName}
             />
             {errors.fullName ? <p className="mt-1 text-xs text-red-600">{errors.fullName}</p> : null}
+          </div>
+          <div>
+            <Label htmlFor="st-gender" required>
+              Gender
+            </Label>
+            <Select
+              id="st-gender"
+              value={form.gender}
+              disabled={readOnly}
+              onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+              className="mt-1.5"
+              error={errors.gender}
+            >
+              <option value="">Select gender…</option>
+              {STUDENT_GENDER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            {errors.gender ? <p className="mt-1 text-xs text-red-600">{errors.gender}</p> : null}
+          </div>
+          <div>
+            <Label htmlFor="st-dob" required>
+              Date of birth
+            </Label>
+            <div className="mt-1.5">
+              <DateInput
+                id="st-dob"
+                value={form.dateOfBirth}
+                disabled={readOnly}
+                onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                error={errors.dateOfBirth}
+              />
+            </div>
+            {errors.dateOfBirth ? (
+              <p className="mt-1 text-xs text-red-600">{errors.dateOfBirth}</p>
+            ) : null}
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="st-blood-group">Blood group</Label>
+            <Input
+              id="st-blood-group"
+              value={form.bloodGroup}
+              disabled={readOnly}
+              placeholder="e.g. O+"
+              onChange={(e) => setForm((f) => ({ ...f, bloodGroup: e.target.value }))}
+              error={errors.bloodGroup}
+              className="mt-1.5"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="st-address">Student address</Label>
+            <textarea
+              id="st-address"
+              rows={3}
+              value={form.studentAddress}
+              disabled={readOnly}
+              placeholder="House no., street, area, city"
+              onChange={(e) => setForm((f) => ({ ...f, studentAddress: e.target.value }))}
+              className={`mt-1.5 w-full resize-y rounded-md border bg-white px-3 py-2 text-sm text-slate-900 transition placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                errors.studentAddress ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-200/90'
+              }`}
+            />
           </div>
           <div>
             <SearchableSingleSelect

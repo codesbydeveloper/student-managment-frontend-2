@@ -660,6 +660,11 @@ function extractNotificationList(data) {
   if (data.data && typeof data.data === 'object' && Array.isArray(data.data.notifications)) {
     return data.data.notifications
   }
+  if (Array.isArray(data.bell)) return data.bell
+  if (Array.isArray(data.messages)) return data.messages
+  if (data.data && typeof data.data === 'object' && Array.isArray(data.data.items)) {
+    return data.data.items
+  }
   if (data.data && typeof data.data === 'object' && Array.isArray(data.data.notices)) {
     return data.data.notices
   }
@@ -1870,8 +1875,12 @@ export function mapBellNotificationFromApi(raw) {
     stamp
   const occurredAtLabel = formatTransportSafetyTime(occurredAtRaw)
 
-  let unread = false
+  const isRead =
+    raw.isRead === true || raw.is_read === true || raw.read === true
+  /** Bell feed is unread-only — treat missing flags as unread unless explicitly read. */
+  let unread = !isRead
   if (raw.unread === true || raw.isUnread === true) unread = true
+  else if (raw.unread === false || raw.isUnread === false) unread = false
   else if (raw.isRead === false || raw.read === false) unread = true
 
   const meta = raw.meta && typeof raw.meta === 'object' && !Array.isArray(raw.meta) ? raw.meta : null
@@ -1910,6 +1919,7 @@ export function mapBellNotificationFromApi(raw) {
     occurredAtLabel,
     occurredAtRaw: occurredAtRaw ? String(occurredAtRaw).trim() : '',
     unread,
+    isRead,
     kind,
     type: kind || category,
     category,
@@ -1940,6 +1950,60 @@ function extractBellUnreadCount(data, mappedList) {
 }
 
 export const BELL_PANEL_DEFAULT_LIMIT = 10
+
+function coerceBellNotificationId(notificationId) {
+  const s = String(notificationId ?? '').trim()
+  if (!s) return null
+  if (/^-?\d+$/.test(s)) return Number(s)
+  return s
+}
+
+/**
+ * POST /api/notifications/bell/read — sets isRead true for one bell notification.
+ * @param {string} token
+ * @param {string | number} notificationId — from bell or PTM row, not PTM request id
+ */
+export async function markBellNotificationRead(token, notificationId) {
+  if (!token) return { ok: false, error: 'Not signed in' }
+  const id = coerceBellNotificationId(notificationId)
+  if (id == null) return { ok: false, error: 'Invalid notification id' }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/notifications/bell/read`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ notificationId: id }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: formatMutationError(data, res.status) }
+    }
+    return { ok: true, data, isRead: true }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg }
+  }
+}
+
+/** Fallback when PTM row has no notificationId — match bell row by ptmRequestId. */
+export async function markBellReadForPtmRequest(token, ptmRequestId) {
+  const ptmId = String(ptmRequestId ?? '').trim()
+  if (!token || !ptmId) return { ok: false, error: 'Missing token or PTM request id' }
+
+  const bellRes = await fetchNotificationBell(token, { limit: BELL_PANEL_DEFAULT_LIMIT })
+  if (!bellRes.ok) return { ok: false, error: bellRes.error }
+
+  const match = bellRes.notifications.find((n) => String(n.ptmRequestId ?? '') === ptmId)
+  if (!match?.id) return { ok: true, skipped: true }
+
+  const readRes = await markBellNotificationRead(token, match.id)
+  if (!readRes.ok) return readRes
+  return { ok: true, notificationId: match.id, isRead: true }
+}
 
 /**
  * GET /api/notifications/bell — recent messages for the header popover (Bearer).

@@ -4,7 +4,7 @@ import { NavIconTile } from '../icons/NavIcon'
 import { useAppBackgroundTheme } from '../../hooks/useAppBackgroundTheme'
 import { getStaffAssignableNavGroups } from '../../utils/navigation'
 import { coerceHexColor } from '../../utils/appBackgroundTheme'
-import { DEFAULT_SIDEBAR_MENU_COLORS, resolveSidebarMenuIconUrl } from '../../utils/sidebarMenuAppearance'
+import { DEFAULT_SIDEBAR_MENU_COLORS } from '../../utils/sidebarMenuAppearance'
 
 /**
  * @param {{
@@ -37,20 +37,26 @@ export function SidebarMenuAppearancePreview({ colors, items }) {
 
   const renderIcon = (key, { isGroup = false } = {}) => {
     const item = items[key]
-    const url = resolveSidebarMenuIconUrl(item)
-    if (url) {
-      return (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200/90">
-          <img src={url} alt="" className="h-6 w-6 object-contain" decoding="async" />
-        </span>
-      )
-    }
     if (isGroup) {
       return (
-        <NavIconTile groupKey={key} isActive={activeKey === key} size="md" variant="sidebar" />
+        <NavIconTile
+          groupKey={key}
+          menuItem={item}
+          isActive={activeKey === key}
+          size="md"
+          variant="sidebar"
+        />
       )
     }
-    return <NavIconTile navKey={key} isActive={activeKey === key} size="md" variant="sidebar" />
+    return (
+      <NavIconTile
+        navKey={key}
+        menuItem={item}
+        isActive={activeKey === key}
+        size="md"
+        variant="sidebar"
+      />
+    )
   }
 
   return (

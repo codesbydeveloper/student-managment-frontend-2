@@ -11,6 +11,7 @@ import {
   formatNotificationApprovalAttribution,
   isApprovedNoticeStatus,
 } from '../../api/notificationsApi'
+import { AudienceForSection } from './AudienceForSection'
 
 const categoryBadge = {
   [NOTIFICATION_CATEGORIES.ADMINISTRATIVE]:
@@ -205,16 +206,7 @@ export function ParentMessageDetailModal({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">For</span>
-            <div className="flex flex-wrap gap-1.5">
-              {(item._feedChildNames || []).map((name) => (
-                <Badge key={name} className="bg-indigo-50 text-indigo-900 ring-indigo-300/40">
-                  {name}
-                </Badge>
-              ))}
-            </div>
-          </div>
+          <AudienceForSection labels={item._feedChildNames} label={item._feedChildNamesLabel} />
         </div>
       ) : null}
     </Modal>

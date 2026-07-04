@@ -9,6 +9,20 @@ import { coerceHexColor, parseHexColor, rgbToHex } from './appBackgroundTheme'
 
 const EVENT = 'sm-sidebar-menu-appearance-changed'
 
+/** Map API / legacy menu keys to canonical frontend nav keys. */
+const SIDEBAR_MENU_KEY_ALIASES = {
+  upcoming_meetings: 'staff_ptm_upcoming',
+  staff_ptm_upcoming_meetings: 'staff_ptm_upcoming',
+  ptm_upcoming: 'staff_ptm_upcoming',
+  'ptm-upcoming': 'staff_ptm_upcoming',
+}
+
+export function canonicalSidebarMenuKey(raw) {
+  const key = String(raw ?? '').trim()
+  if (!key) return ''
+  return SIDEBAR_MENU_KEY_ALIASES[key] ?? key
+}
+
 export const DEFAULT_SIDEBAR_MENU_COLORS = {
   textColor: '#f1f5f9',
   hoverTextColor: '#ffffff',
@@ -106,7 +120,9 @@ export function normalizeSidebarMenuAppearance(raw) {
     items[key] = normalizeMenuItem(rawItems[key], key)
   }
   for (const [key, value] of Object.entries(rawItems)) {
-    if (!items[key]) items[key] = normalizeMenuItem(value, key)
+    const canonical = canonicalSidebarMenuKey(key)
+    if (!canonical) continue
+    if (!items[canonical]) items[canonical] = normalizeMenuItem(value, canonical)
   }
   return { colors, items }
 }
@@ -124,7 +140,7 @@ export function mapSidebarMenuAppearanceFromApi(data) {
   const items = buildDefaultItems()
   const menus = Array.isArray(data.menus) ? data.menus : []
   for (const menu of menus) {
-    const key = String(menu?.key ?? '').trim()
+    const key = canonicalSidebarMenuKey(menu?.key)
     if (!key) continue
     items[key] = normalizeMenuItem(menu, key)
   }

@@ -29,7 +29,7 @@ export function PageEmptyState({
     >
       {navKey || groupKey ? (
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
-          <NavIconTile navKey={navKey} groupKey={groupKey} size="md" />
+          <NavIconTile navKey={navKey} groupKey={groupKey} size="lg" />
         </div>
       ) : null}
       <p className={`font-semibold text-slate-800 ${navKey || groupKey ? 'mt-5' : ''} text-base`}>

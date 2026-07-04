@@ -22,7 +22,15 @@ export default function ParentPtmHistoryPage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [error, setError] = useState('')
-  const { viewRow, viewLoading, viewError, openView, closeView } = usePtmRequestViewer(token)
+  const { viewRow, viewLoading, viewError, openView, closeView } = usePtmRequestViewer(token, {
+    onNotificationMarkedRead: (row) => {
+      setApiRows((prev) =>
+        Array.isArray(prev)
+          ? prev.map((r) => (String(r.id) === String(row.id) ? { ...r, isRead: true } : r))
+          : prev,
+      )
+    },
+  })
   useOpenPtmRequestFromBell(openView)
 
   useEffect(() => {

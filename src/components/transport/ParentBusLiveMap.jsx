@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Tooltip, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -26,6 +26,41 @@ function MapFitBounds({ points }) {
     const bounds = L.latLngBounds(points)
     map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16, animate: true })
   }, [points, map])
+  return null
+}
+
+function RecenterOnBusControl({ position }) {
+  const map = useMap()
+  const positionRef = useRef(position)
+  positionRef.current = position
+
+  useEffect(() => {
+    const control = new L.Control({ position: 'topright' })
+    control.onAdd = () => {
+      const wrap = L.DomUtil.create('div', 'leaflet-bar leaflet-control')
+      const btn = L.DomUtil.create('button', '', wrap)
+      btn.type = 'button'
+      btn.title = 'Center on bus'
+      btn.setAttribute('aria-label', 'Center map on bus')
+      btn.className =
+        'flex h-[34px] w-[34px] items-center justify-center bg-white text-slate-700 hover:bg-slate-50 hover:text-indigo-700'
+      btn.innerHTML =
+        '<span class="inline-flex" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0 -16 0"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M20 12h2"/><path d="M2 12h2"/></svg></span>'
+      L.DomEvent.disableClickPropagation(wrap)
+      L.DomEvent.on(btn, 'click', (e) => {
+        L.DomEvent.stop(e)
+        const pos = positionRef.current
+        if (!pos?.length || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) return
+        map.setView(pos, Math.max(map.getZoom(), 15), { animate: true })
+      })
+      return wrap
+    }
+    control.addTo(map)
+    return () => {
+      control.remove()
+    }
+  }, [map])
+
   return null
 }
 
@@ -122,6 +157,7 @@ export function ParentBusLiveMap({
         ) : null}
         {fitAllMarkers && fitPoints.length > 1 ? <MapFitBounds points={fitPoints} /> : null}
         {showBus ? <MapFollowPosition center={position} enabled={followBus && fitPoints.length <= 1} /> : null}
+        {showBus ? <RecenterOnBusControl position={position} /> : null}
       </MapContainer>
     </div>
   )

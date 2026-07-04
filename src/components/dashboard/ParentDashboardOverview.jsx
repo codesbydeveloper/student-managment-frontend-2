@@ -244,7 +244,7 @@ export function ParentDashboardOverview() {
       {teachersOpen ? (
         <Card>
           <h2 className="flex items-center gap-2.5 text-lg font-bold text-slate-900">
-            <NavIconTile navKey="teachers" size="md" />
+            <NavIconTile navKey="teachers" size="lg" />
             Teachers assigned to your child
           </h2>
           {studentTeachers.length === 0 ? (

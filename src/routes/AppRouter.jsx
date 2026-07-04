@@ -45,6 +45,7 @@ const ParentPtmHistoryPage = lazy(() => import('../pages/ptm/ParentPtmHistoryPag
 const TeacherPtmRequestsPage = lazy(() => import('../pages/ptm/TeacherPtmRequestsPage.jsx'))
 const StaffPtmRequestsPage = lazy(() => import('../pages/ptm/StaffPtmRequestsPage.jsx'))
 const StaffPtmHistoryPage = lazy(() => import('../pages/ptm/StaffPtmHistoryPage.jsx'))
+const StaffPtmUpcomingPage = lazy(() => import('../pages/ptm/StaffPtmUpcomingPage.jsx'))
 const AdminVisitorLogsPage = lazy(() => import('../pages/crm/AdminVisitorLogsPage.jsx'))
 const AdminLeadsPage = lazy(() => import('../pages/crm/AdminLeadsPage.jsx'))
 const TeacherAssignedLeadsPage = lazy(() => import('../pages/crm/TeacherAssignedLeadsPage.jsx'))
@@ -339,6 +340,14 @@ export function AppRouter() {
             element={
               <ProtectedRoute menuKey="staff_ptm_requests" allowedRoles={[ROLES.ADMIN, ROLES.PRINCIPAL]}>
                 <StaffPtmRequestsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="ptm-requests/admin/upcoming"
+            element={
+              <ProtectedRoute menuKey="staff_ptm_upcoming" allowedRoles={[ROLES.ADMIN, ROLES.PRINCIPAL]}>
+                <StaffPtmUpcomingPage />
               </ProtectedRoute>
             }
           />

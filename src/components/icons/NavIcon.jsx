@@ -98,6 +98,7 @@ export const NAV_TILE_COLOR_BY_KEY = {
   admin_visitor_logs: 'bg-stone-500',
   admin_leads: 'bg-orange-500',
   staff_ptm_requests: 'bg-amber-500',
+  staff_ptm_upcoming: 'bg-amber-500',
   staff_ptm_history: 'bg-amber-600',
 }
 
@@ -152,7 +153,8 @@ const NAV_ICON_BY_KEY = {
   create_lead: MdPersonAdd,
   admin_visitor_logs: TbClipboardList,
   admin_leads: MdContactPage,
-  staff_ptm_requests: TbCalendarEvent,
+  staff_ptm_requests: TbClipboardList,
+  staff_ptm_upcoming: TbCalendarEvent,
   staff_ptm_history: TbHistory,
 }
 
@@ -180,14 +182,43 @@ function resolveMenuItemFromAppearance(appearance, navKey, groupKey) {
   return null
 }
 
-function navIconTileSizes(size) {
-  if (size === 'lg') {
-    return { box: 'h-12 w-12 rounded-2xl', img: 'h-7 w-7' }
+function navIconTileStyle(size, variant = 'default') {
+  const isSidebar = variant === 'sidebar'
+  if (isSidebar) {
+    if (size === 'sm') {
+      return {
+        box: {
+          width: 'var(--sm-sidebar-icon-box-sm)',
+          height: 'var(--sm-sidebar-icon-box-sm)',
+        },
+        glyph: 'var(--sm-sidebar-icon-glyph-sm)',
+      }
+    }
+    return {
+      box: { width: 'var(--sm-sidebar-icon-box)', height: 'var(--sm-sidebar-icon-box)' },
+      glyph: 'var(--sm-sidebar-icon-glyph)',
+    }
   }
   if (size === 'sm') {
-    return { box: 'h-8 w-8 rounded-xl', img: 'h-5 w-5' }
+    return {
+      box: { width: 'var(--sm-app-icon-box-sm)', height: 'var(--sm-app-icon-box-sm)' },
+      glyph: 'var(--sm-app-icon-glyph-sm)',
+    }
   }
-  return { box: 'h-10 w-10 rounded-2xl', img: 'h-6 w-6' }
+  if (size === 'xl' || size === 'lg') {
+    return {
+      box: { width: 'var(--sm-app-icon-box-lg)', height: 'var(--sm-app-icon-box-lg)' },
+      glyph: 'var(--sm-app-icon-glyph-lg)',
+    }
+  }
+  return {
+    box: { width: 'var(--sm-app-icon-box-md)', height: 'var(--sm-app-icon-box-md)' },
+    glyph: 'var(--sm-app-icon-glyph-md)',
+  }
+}
+
+function navIconTileRoundClass(size) {
+  return size === 'sm' ? 'rounded-xl' : 'rounded-2xl'
 }
 
 function navIconActiveRing(variant, isActive) {
@@ -198,7 +229,8 @@ function navIconActiveRing(variant, isActive) {
 }
 
 function NavIconImageTile({ url, size, isActive, variant = 'default' }) {
-  const { box, img } = navIconTileSizes(size)
+  const { box, glyph } = navIconTileStyle(size, variant)
+  const round = navIconTileRoundClass(size)
   const surface =
     variant === 'sidebar'
       ? 'bg-white ring-1 ring-slate-200/90'
@@ -206,10 +238,17 @@ function NavIconImageTile({ url, size, isActive, variant = 'default' }) {
 
   return (
     <span
-      className={`flex shrink-0 items-center justify-center overflow-hidden shadow-md transition ${box} ${surface} ${navIconActiveRing(variant, isActive)}`}
+      style={box}
+      className={`flex shrink-0 items-center justify-center overflow-hidden shadow-md transition ${round} ${surface} ${navIconActiveRing(variant, isActive)}`}
       aria-hidden
     >
-      <img src={url} alt="" className={`${img} object-contain`} decoding="async" />
+      <img
+        src={url}
+        alt=""
+        style={{ width: glyph, height: glyph }}
+        className="object-contain"
+        decoding="async"
+      />
     </span>
   )
 }
@@ -239,17 +278,18 @@ export function NavIconTile({
     MdRadioButtonUnchecked
   const isSidebar = variant === 'sidebar'
   const color = isSidebar ? 'bg-white text-slate-700' : getNavTileColor(navKey, groupKey)
-  const { box } = navIconTileSizes(size)
-  const iconSize = size === 'lg' ? 'h-6 w-6' : size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
+  const { box, glyph } = navIconTileStyle(size, variant)
+  const round = navIconTileRoundClass(size)
 
   return (
     <span
-      className={`flex shrink-0 items-center justify-center shadow-md transition ${box} ${color} ${
+      style={box}
+      className={`flex shrink-0 items-center justify-center shadow-md transition ${round} ${color} ${
         isSidebar ? '' : 'text-white'
       } ${navIconActiveRing(variant, isActive)}`}
       aria-hidden
     >
-      <Icon className={iconSize} strokeWidth={1.75} />
+      <Icon style={{ width: glyph, height: glyph }} strokeWidth={1.75} />
     </span>
   )
 }

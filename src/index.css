@@ -6,6 +6,19 @@
 }
 
 @layer base {
+  :root {
+    --sm-sidebar-icon-box: 40px;
+    --sm-sidebar-icon-glyph: 24px;
+    --sm-sidebar-icon-box-sm: 32px;
+    --sm-sidebar-icon-glyph-sm: 20px;
+    --sm-app-icon-box-lg: 60px;
+    --sm-app-icon-glyph-lg: 36px;
+    --sm-app-icon-box-md: 40px;
+    --sm-app-icon-glyph-md: 24px;
+    --sm-app-icon-box-sm: 32px;
+    --sm-app-icon-glyph-sm: 20px;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     font-family: var(--font-sans);
@@ -149,7 +162,8 @@
 
 
 .datetime-input::-webkit-calendar-picker-indicator,
-.date-input::-webkit-calendar-picker-indicator {
+.date-input::-webkit-calendar-picker-indicator,
+.time-input::-webkit-calendar-picker-indicator {
   display: none;
   -webkit-appearance: none;
   appearance: none;

@@ -53,15 +53,15 @@ export function MobileDockNav({ items: itemsProp, role, onNavigate, visible = tr
             end={navLinkUsesEnd(item.to)}
             onClick={() => onNavigate?.()}
             className={({ isActive }) =>
-              `flex min-h-[4.75rem] min-w-[4.75rem] shrink-0 flex-col items-center justify-start gap-1.5 rounded-xl px-2 py-2 transition active:scale-[0.97] ${
+              `flex min-h-[5.5rem] min-w-[5.5rem] shrink-0 flex-col items-center justify-start gap-1.5 rounded-xl px-2 py-2 transition active:scale-[0.97] ${
                 isActive ? 'text-white' : 'text-slate-500 active:text-slate-300'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center">
-                  <NavIconTile navKey={item.key} isActive={isActive} size="md" variant="dock" />
+                <span className="flex h-[60px] w-[60px] shrink-0 items-center justify-center">
+                  <NavIconTile navKey={item.key} isActive={isActive} size="lg" variant="dock" />
                 </span>
                 <span
                   className={`line-clamp-2 max-w-[5.25rem] px-0.5 text-center text-[10px] font-bold uppercase leading-snug tracking-wide ${

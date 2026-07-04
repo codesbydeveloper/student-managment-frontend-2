@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'react-toastify'
+import { useAuth } from '../../context/AuthContext'
+import { ROLES } from '../../utils/constants'
 import { BellIcon } from '../icons/BellIcon'
 import {
   dismissPushPermissionForToday,
@@ -23,11 +25,16 @@ function completeSuccess(setVisible, webpushrSyncFailed) {
  * Original floating card: bell left, message, NOT YET / YES bottom-right.
  */
 export function PushNotificationPermissionBanner() {
+  const { user } = useAuth()
   const [visible, setVisible] = useState(false)
 
   const syncVisible = useCallback(() => {
+    if (user?.role === ROLES.DRIVER) {
+      setVisible(false)
+      return
+    }
     setVisible(shouldShowPushPermissionBanner())
-  }, [])
+  }, [user?.role])
 
   useEffect(() => {
     syncVisible()
@@ -77,7 +84,7 @@ export function PushNotificationPermissionBanner() {
     })()
   }
 
-  if (!visible) return null
+  if (user?.role === ROLES.DRIVER || !visible) return null
 
   return (
     <div

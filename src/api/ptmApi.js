@@ -247,8 +247,23 @@ export function mapApiPtmRequestRow(raw) {
 
   const approver = extractPtmApproverFields(raw)
 
+  const notificationIdRaw =
+    raw.notificationId ??
+    raw.notification_id ??
+    raw.noticeId ??
+    raw.notice_id ??
+    null
+  const isRead =
+    raw.isRead === true ||
+    raw.is_read === true ||
+    raw.read === true ||
+    raw.notificationIsRead === true ||
+    raw.notification_is_read === true
+
   return {
     id: String(id),
+    notificationId: notificationIdRaw != null ? String(notificationIdRaw) : '',
+    isRead,
     parentUserId: parentUserId != null ? String(parentUserId) : '',
     parentName: parentName || 'Parent',
     studentId: studentId != null ? String(studentId) : '',
@@ -297,11 +312,14 @@ function extractPagedPtmResponse(data) {
     return { list: data, total: data.length, page: 1, limit: data.length || 20 }
   }
   let list = []
-  if (Array.isArray(data.requests)) list = data.requests
+  if (Array.isArray(data.meetings)) list = data.meetings
+  else if (Array.isArray(data.requests)) list = data.requests
   else if (Array.isArray(data.data)) list = data.data
+  else if (Array.isArray(data.rows)) list = data.rows
   else if (Array.isArray(data.items)) list = data.items
   else if (Array.isArray(data.results)) list = data.results
   else if (Array.isArray(data.ptmRequests)) list = data.ptmRequests
+  else if (Array.isArray(data.ptm_requests)) list = data.ptm_requests
   else if (
     data.data &&
     typeof data.data === 'object' &&
@@ -309,6 +327,20 @@ function extractPagedPtmResponse(data) {
     Array.isArray(data.data.requests)
   ) {
     list = data.data.requests
+  } else if (
+    data.data &&
+    typeof data.data === 'object' &&
+    !Array.isArray(data.data) &&
+    Array.isArray(data.data.meetings)
+  ) {
+    list = data.data.meetings
+  } else if (
+    data.data &&
+    typeof data.data === 'object' &&
+    !Array.isArray(data.data) &&
+    Array.isArray(data.data.rows)
+  ) {
+    list = data.data.rows
   }
   const meta = data.pagination || data.meta || {}
   const total = Number(
@@ -631,6 +663,146 @@ export async function fetchAdminAllPtmRequests(token, { page = 1, limit = 10 } =
     const msg =
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg, requests: [], total: 0, page: p, limit: lim }
+  }
+}
+
+/**
+ * GET /api/ptm-requests/upcoming?page=&limit= — admin / principal upcoming PTMs.
+ */
+export async function fetchUpcomingPtmMeetings(token, { page = 1, limit = 10 } = {}) {
+  const p = Math.max(1, Number(page) || 1)
+  const lim = Math.min(100, Math.max(1, Number(limit) || 10))
+  if (!token) {
+    return { ok: false, error: 'Not signed in', requests: [], total: 0, page: p, limit: lim }
+  }
+  try {
+    const qs = new URLSearchParams({ page: String(p), limit: String(lim) })
+    const res = await fetch(`${API_BASE_URL}/api/ptm-requests/upcoming?${qs}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: formatListError(data, res.status),
+        requests: [],
+        total: 0,
+        page: p,
+        limit: lim,
+      }
+    }
+    const { list: rawList, total, page: resPage, limit: resLimit } = extractPagedPtmResponse(data)
+    const requests = rawList.map(mapApiPtmRequestRow).filter(Boolean)
+    const totalSafe = Number.isFinite(total) ? total : requests.length
+    const limitSafe = resLimit || lim
+    const pageSafe = resPage || p
+    const totalPages = totalSafe > 0 ? Math.ceil(totalSafe / Math.max(1, limitSafe)) : 0
+    return {
+      ok: true,
+      requests,
+      total: totalSafe,
+      page: pageSafe,
+      limit: limitSafe,
+      totalPages,
+      hasNextPage: pageSafe * limitSafe < totalSafe,
+      hasPrevPage: pageSafe > 1,
+    }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg, requests: [], total: 0, page: p, limit: lim }
+  }
+}
+
+/**
+ * PATCH /api/ptm-requests/upcoming/:id — update scheduled time / note for an upcoming meeting.
+ *
+ * @param {string} token
+ * @param {string | number} id
+ * @param {{ scheduledAt: string, meetingNote?: string }} body
+ */
+export async function updateUpcomingPtmMeeting(token, id, body) {
+  if (!token) return { ok: false, error: 'Not signed in' }
+  const numericId = toApiId(id)
+  if (numericId == null) return { ok: false, error: 'Missing PTM request id.' }
+  const scheduledAt = String(body?.scheduledAt ?? '').trim()
+  if (!scheduledAt) return { ok: false, error: 'Pick a meeting date and time.' }
+  const payload = { scheduledAt }
+  const meetingNote = String(body?.meetingNote ?? '').trim()
+  if (meetingNote) payload.meetingNote = meetingNote
+  const idSeg = encodeURIComponent(String(numericId))
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/ptm-requests/upcoming/${idSeg}`, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: formatMutationError(data, res.status), status: res.status }
+    }
+    return {
+      ok: true,
+      message: (typeof data?.message === 'string' && data.message) || 'Meeting updated.',
+      request: extractSinglePtmRow(data),
+      data: data && typeof data === 'object' ? data : null,
+    }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg }
+  }
+}
+
+/**
+ * PATCH /api/ptm-requests/upcoming/:id/reject — cancel an upcoming meeting and notify parent.
+ *
+ * @param {string} token
+ * @param {string | number} id
+ * @param {{ rejectionNote?: string }} [opts]
+ */
+export async function rejectUpcomingPtmMeeting(token, id, opts = {}) {
+  if (!token) return { ok: false, error: 'Not signed in' }
+  const numericId = toApiId(id)
+  if (numericId == null) return { ok: false, error: 'Missing PTM request id.' }
+  const idSeg = encodeURIComponent(String(numericId))
+  const rejectionNote = String(opts?.rejectionNote ?? '').trim()
+  const body = rejectionNote ? { rejectionNote } : {}
+  try {
+    const headers = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    }
+    const init = { method: 'PATCH', headers }
+    if (Object.keys(body).length > 0) {
+      headers['Content-Type'] = 'application/json'
+      init.body = JSON.stringify(body)
+    }
+    const res = await fetch(`${API_BASE_URL}/api/ptm-requests/upcoming/${idSeg}/reject`, init)
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: formatMutationError(data, res.status), status: res.status }
+    }
+    return {
+      ok: true,
+      message:
+        (typeof data?.message === 'string' && data.message) ||
+        'Upcoming PTM meeting rejected. The parent has been notified.',
+      request: extractSinglePtmRow(data),
+      data: data && typeof data === 'object' ? data : null,
+    }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg }
   }
 }
 

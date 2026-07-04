@@ -57,7 +57,7 @@ export default function SettingsHubPage() {
           >
             <p className="text-lg font-bold text-slate-900">Sidebar menu appearance</p>
             <p className="mt-2 text-sm text-slate-600">
-              Menu labels, icons, and text colors for default, hover, and active states.
+              Menu labels, icons, icon sizes, and text colors for default, hover, and active states.
             </p>
             <span className="mt-4 inline-block text-sm font-bold text-indigo-700">Open →</span>
           </Link>

@@ -252,6 +252,10 @@ export function mapApiStudentToRow(raw) {
     id: String(id),
     fullName: String(o.fullName ?? o.name ?? '').trim(),
     email: String(o.email ?? '').trim().toLowerCase(),
+    gender: String(o.gender ?? '').trim(),
+    dateOfBirth: String(o.dateOfBirth ?? o.dob ?? '').trim(),
+    bloodGroup: String(o.bloodGroup ?? '').trim(),
+    studentAddress: String(o.studentAddress ?? o.address ?? '').trim(),
     classId:
       o.classId != null && o.classId !== ''
         ? String(o.classId)
@@ -444,6 +448,10 @@ export async function createStudent(token, body) {
   const payload = {
     fullName: body.fullName,
     isActive: Boolean(body.active),
+    gender: String(body.gender ?? '').trim(),
+    dateOfBirth: String(body.dateOfBirth ?? '').trim(),
+    bloodGroup: String(body.bloodGroup ?? '').trim(),
+    studentAddress: String(body.studentAddress ?? '').trim(),
   }
   const emailVal = String(body.email ?? '').trim().toLowerCase()
   if (emailVal) payload.email = emailVal
@@ -488,6 +496,10 @@ export async function updateStudent(token, studentId, body) {
     fullName: body.fullName,
     isActive: Boolean(body.active),
     parentIds: parentIdsForApi(body.parentId != null && body.parentId !== '' ? [body.parentId] : []),
+    gender: String(body.gender ?? '').trim(),
+    dateOfBirth: String(body.dateOfBirth ?? '').trim(),
+    bloodGroup: String(body.bloodGroup ?? '').trim(),
+    studentAddress: String(body.studentAddress ?? '').trim(),
   }
   const emailVal = String(body.email ?? '').trim().toLowerCase()
   if (emailVal) payload.email = emailVal

@@ -21,11 +21,13 @@ import {
 import { cacheLoginBranding } from './utils/loginBranding'
 import { fetchPublicSidebarMenuAppearance } from './api/sidebarMenuAppearanceApi'
 import { fetchPublicButtonAppearance } from './api/buttonAppearanceApi'
+import { fetchPublicIconAppearance } from './api/iconAppearanceApi'
 import {
   applyAppButtonColorToDocument,
   cacheSidebarMenuAppearance,
   normalizeSidebarMenuAppearance,
 } from './utils/sidebarMenuAppearance'
+import { cacheIconAppearance } from './utils/iconAppearance'
 import {
   cleanupDevServiceWorkers,
   preventServiceWorkerReloadLoop,
@@ -49,12 +51,13 @@ async function waitForBootSiteIdentity() {
 }
 
 async function loadPublicAppearance() {
-  const [siteIdentity, loginBranding, background, sidebar, button] = await Promise.all([
+  const [siteIdentity, loginBranding, background, sidebar, button, iconAppearance] = await Promise.all([
     fetchPublicSiteIdentity(),
     fetchPublicLoginBranding(),
     fetchPublicBackgroundAppearance(),
     fetchPublicSidebarMenuAppearance(),
     fetchPublicButtonAppearance(),
+    fetchPublicIconAppearance(),
   ])
 
   if (siteIdentity.ok && siteIdentity.identity) {
@@ -78,6 +81,10 @@ async function loadPublicAppearance() {
 
   if (button.ok && button.backgroundColor) {
     applyAppButtonColorToDocument({ buttonColor: button.backgroundColor })
+  }
+
+  if (iconAppearance.ok && iconAppearance.appearance) {
+    cacheIconAppearance(iconAppearance.appearance)
   }
 
   markPublicAppearanceReady()
@@ -118,13 +125,12 @@ function renderApp() {
 async function bootstrap() {
   await cleanupDevServiceWorkers()
 
-  // Static manifest.webmanifest is in index.html — safe for tablet/PWA launch.
-  markPwaManifestReady()
   renderApp()
   registerProductionPwa()
 
   await waitForBootSiteIdentity()
   await loadPublicAppearance()
+  markPwaManifestReady()
 }
 
 void bootstrap()

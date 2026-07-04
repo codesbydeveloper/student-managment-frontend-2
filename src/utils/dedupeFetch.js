@@ -8,6 +8,7 @@ export const PUBLIC_APPEARANCE_KEYS = {
   backgroundAppearance: 'public:background-appearance',
   sidebarMenuAppearance: 'public:sidebar-menu-appearance',
   buttonAppearance: 'public:button-appearance',
+  iconAppearance: 'public:icon-appearance',
 }
 
 function shouldCacheResult(result) {

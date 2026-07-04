@@ -13,7 +13,7 @@ export function CardHeader({ title, subtitle, action, subtitleCompact, navKey, g
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h2 className="flex items-center gap-2.5 text-lg font-semibold text-slate-900">
-          {navKey || groupKey ? <NavIconTile navKey={navKey} groupKey={groupKey} size="md" /> : null}
+          {navKey || groupKey ? <NavIconTile navKey={navKey} groupKey={groupKey} size="lg" /> : null}
           <span>{title}</span>
         </h2>
         {subtitle ? (

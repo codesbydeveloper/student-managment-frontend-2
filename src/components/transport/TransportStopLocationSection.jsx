@@ -1,5 +1,5 @@
 import { PickupPointLocationFields } from './PickupPointLocationFields'
-import { Input } from '../ui/Input'
+import { TimeInput } from '../ui/TimeInput'
 import { Label } from '../ui/Label'
 
 const SECTION_STYLES = {
@@ -93,14 +93,14 @@ export function TransportStopLocationSection({
           <Label htmlFor={`${prefix}-time`} required>
             {style.timeLabel}
           </Label>
-          <Input
-            id={`${prefix}-time`}
-            type="time"
-            value={timeValue}
-            onChange={(e) => onTimeChange(e.target.value)}
-            className="mt-1.5 max-w-xs"
-            disabled={timeFieldDisabled}
-          />
+          <div className="mt-1.5 max-w-xs">
+            <TimeInput
+              id={`${prefix}-time`}
+              value={timeValue}
+              onChange={(e) => onTimeChange(e.target.value)}
+              disabled={timeFieldDisabled}
+            />
+          </div>
           {timeHint ? <p className="mt-1.5 text-xs text-slate-500">{timeHint}</p> : null}
         </div>
       </div>

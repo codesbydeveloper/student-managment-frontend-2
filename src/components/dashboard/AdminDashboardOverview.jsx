@@ -208,7 +208,8 @@ export function AdminDashboardOverview() {
   const showTransport = canShow('transport_live_buses') || canShow('transport_trip_history')
   const showVisitors = canShow('admin_visitor_logs')
   const showLeads = canShow('admin_leads')
-  const showPtm = canShow('staff_ptm_requests') || canShow('staff_ptm_history')
+  const showPtm =
+    canShow('staff_ptm_requests') || canShow('staff_ptm_upcoming') || canShow('staff_ptm_history')
   const showRecentNotices = canShow('notice_history')
 
   return (
@@ -374,7 +375,7 @@ export function AdminDashboardOverview() {
           </div>
           <Card className="!p-0">
             <div className="flex items-start gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
-              <NavIconTile navKey="admin_leads" size="md" />
+              <NavIconTile navKey="admin_leads" size="lg" />
               <div>
                 <p className="text-sm font-medium text-slate-600">Total leads</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-900">{fmtNum(dash.leads.total)}</p>
@@ -415,23 +416,31 @@ export function AdminDashboardOverview() {
                 hint="PTM history →"
               />
             ) : null}
+            {canShow('staff_ptm_upcoming') ? (
+              <DashboardStatTile
+                to="/ptm-requests/admin/upcoming"
+                navKey="staff_ptm_upcoming"
+                label="Upcoming"
+                value={fmtNum(dash.ptm.upcoming)}
+                hint="Upcoming meetings →"
+              />
+            ) : canShow('staff_ptm_requests') ? (
+              <DashboardStatTile
+                to="/ptm-requests/staff"
+                navKey="staff_ptm_requests"
+                label="Upcoming"
+                value={fmtNum(dash.ptm.upcoming)}
+                hint="Staff PTM queue →"
+              />
+            ) : null}
             {canShow('staff_ptm_requests') ? (
-              <>
-                <DashboardStatTile
-                  to="/ptm-requests/staff"
-                  navKey="staff_ptm_requests"
-                  label="Upcoming"
-                  value={fmtNum(dash.ptm.upcoming)}
-                  hint="Staff PTM queue →"
-                />
-                <DashboardStatTile
-                  to="/ptm-requests/staff"
-                  navKey="staff_ptm_requests"
-                  label="Pending requests"
-                  value={fmtNum(dash.ptm.pending)}
-                  hint="Review requests →"
-                />
-              </>
+              <DashboardStatTile
+                to="/ptm-requests/staff"
+                navKey="staff_ptm_requests"
+                label="Pending requests"
+                value={fmtNum(dash.ptm.pending)}
+                hint="Review requests →"
+              />
             ) : null}
           </div>
         </section>

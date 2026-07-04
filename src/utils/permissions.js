@@ -71,6 +71,7 @@ export const ROUTE_ACCESS = {
   admin_visitor_logs: [ROLES.ADMIN, ROLES.PRINCIPAL, ROLES.TEACHER],
   admin_leads: [ROLES.ADMIN, ROLES.PRINCIPAL],
   staff_ptm_requests: [ROLES.ADMIN, ROLES.PRINCIPAL],
+  staff_ptm_upcoming: [ROLES.ADMIN, ROLES.PRINCIPAL],
   staff_ptm_history: [ROLES.ADMIN, ROLES.PRINCIPAL],
   create_category: [ROLES.ADMIN, ROLES.PRINCIPAL],
   create_notice: [ROLES.ADMIN, ROLES.PRINCIPAL, ROLES.TEACHER],

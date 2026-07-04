@@ -76,14 +76,18 @@ export function DashboardLayout() {
   const institutionTitle = branding.title || siteBranding.siteName || 'School'
   const sidebarMenuStyle = sidebarMenuCssVars(sidebarMenuAppearance.colors)
   const menuItem = (key) => sidebarMenuAppearance.items[key]
+  const menuLabel = (key, fallback) => {
+    const custom = String(menuItem(key)?.label ?? '').trim()
+    return custom || fallback
+  }
 
   useEffect(() => {
     if (user.role === ROLES.DRIVER) {
       disableWebpushrForDriver()
       return
     }
-    enableWebpushrForUser()
-  }, [user.role])
+    void enableWebpushrForUser({ userId: user.id, email: user.email })
+  }, [user.role, user.id, user.email])
 
   useTransportTripMaintenance(user.role === ROLES.DRIVER)
 
@@ -121,7 +125,7 @@ export function DashboardLayout() {
     ptm:
       user.role === ROLES.TEACHER
         ? location.pathname === '/ptm-requests'
-        : pathIn(['/ptm-requests/staff', '/ptm-requests/admin/history']),
+        : pathIn(['/ptm-requests/staff', '/ptm-requests/admin/upcoming', '/ptm-requests/admin/history']),
     communications: pathIn(['/create-notice', '/notifications']),
     crm: pathIn(['/assigned-leads', '/create-lead', '/visitor-logs']),
   }
@@ -230,7 +234,7 @@ export function DashboardLayout() {
                       tile
                       item={menuItem(entry.key)}
                     />
-                    <span className="min-w-0 flex-1 break-words leading-snug">{entry.label}</span>
+                    <span className="min-w-0 flex-1 break-words leading-snug">{menuLabel(entry.key, entry.label)}</span>
                   </>
                 )}
               </NavLink>
@@ -263,7 +267,7 @@ export function DashboardLayout() {
                       <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span className="min-w-0 flex-1 break-words leading-snug">{entry.label}</span>
+                  <span className="min-w-0 flex-1 break-words leading-snug">{menuLabel(entry.key, entry.label)}</span>
                 </button>
                 {entry.hint ? (
                   <p className="ml-8 mr-2 pb-1.5 text-[10px] leading-snug text-slate-500">{entry.hint}</p>
@@ -286,7 +290,9 @@ export function DashboardLayout() {
                               tile
                               item={menuItem(item.key)}
                             />
-                            <span className="min-w-0 flex-1 break-words leading-snug">{item.label}</span>
+                            <span className="min-w-0 flex-1 break-words leading-snug">
+                              {menuLabel(item.key, item.label)}
+                            </span>
                           </>
                         )}
                       </NavLink>

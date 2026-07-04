@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
+import { TbCurrentLocation } from 'react-icons/tb'
 import 'leaflet/dist/leaflet.css'
 import { OSM_TILE_LAYER_URL } from '../../modules/transport/transportMapConstants'
 import { getBusMapIcon } from '../../modules/transport/transportBusMapIcon'
@@ -59,14 +60,31 @@ export function LiveTripMap({ position, className = '', label = 'Bus' }) {
     mapRef.current.panTo(ll)
   }, [lat, lng, label])
 
+  const recenterOnBus = () => {
+    const map = mapRef.current
+    if (!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return
+    map.setView([lat, lng], Math.max(map.getZoom(), 15), { animate: true })
+  }
+
   return (
-    <div className={className}>
+    <div className={`relative ${className}`}>
       <div
         ref={containerRef}
         className="z-0 min-h-[220px] w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-100 shadow-inner"
         style={{ minHeight: 'min(50vh, 22rem)' }}
         aria-label="Map showing bus location"
       />
+      {Number.isFinite(lat) && Number.isFinite(lng) ? (
+        <button
+          type="button"
+          title="Center on bus"
+          aria-label="Center map on bus"
+          onClick={recenterOnBus}
+          className="absolute right-3 top-3 z-[1000] flex size-9 items-center justify-center rounded-lg border border-slate-200/90 bg-white text-slate-700 shadow-md transition hover:bg-slate-50 hover:text-indigo-700"
+        >
+          <TbCurrentLocation className="size-5 shrink-0" aria-hidden />
+        </button>
+      ) : null}
     </div>
   )
 }

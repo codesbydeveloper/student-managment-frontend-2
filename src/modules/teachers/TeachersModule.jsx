@@ -1423,6 +1423,7 @@ export function TeachersModule() {
                 value={form.classIds}
                 onChange={(classIds) => setForm((f) => ({ ...f, classIds }))}
                 disabled={!manage}
+                showSelectAll
                 collapsedHint="None — add classes later when editing…"
                 searchPlaceholder="Search classes by name, grade, section, or room…"
                 emptyText="No classes match your search."

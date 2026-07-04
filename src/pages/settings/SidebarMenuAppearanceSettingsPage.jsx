@@ -14,8 +14,15 @@ import {
   resetButtonAppearanceDefaults,
   updateButtonAppearance,
 } from '../../api/buttonAppearanceApi'
+import {
+  fetchPublicIconAppearance,
+  rememberPublicIconAppearance,
+  resetIconAppearanceDefaults,
+  updateIconAppearance,
+} from '../../api/iconAppearanceApi'
 import { SettingsNav } from '../../components/settings/SettingsNav'
 import { SidebarMenuAppearancePreview } from '../../components/settings/SidebarMenuAppearancePreview'
+import { IconSizeSlider } from '../../components/settings/IconSizeSlider'
 import { CompactColorField } from '../../components/settings/CompactColorField'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -31,6 +38,11 @@ import {
   resolveSidebarMenuIconUrl,
   setSidebarMenuAppearance,
 } from '../../utils/sidebarMenuAppearance'
+import {
+  DEFAULT_ICON_APPEARANCE,
+  getIconAppearanceSnapshot,
+  setIconAppearance,
+} from '../../utils/iconAppearance'
 
 const MAX_ICON_BYTES = 256 * 1024
 
@@ -98,6 +110,8 @@ export default function SidebarMenuAppearanceSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [buttonSaving, setButtonSaving] = useState(false)
   const [iconBusyKey, setIconBusyKey] = useState(null)
+  const [iconSizes, setIconSizes] = useState(() => getIconAppearanceSnapshot())
+  const [savedIconSizes, setSavedIconSizes] = useState(() => getIconAppearanceSnapshot())
 
   const applyAppearance = (next) => {
     const normalized = setSidebarMenuAppearance(next)
@@ -106,11 +120,19 @@ export default function SidebarMenuAppearanceSettingsPage() {
     return normalized
   }
 
+  const applyIconSizes = (appearance) => {
+    const next = setIconAppearance(appearance)
+    setIconSizes(next)
+    setSavedIconSizes(next)
+    return next
+  }
+
   useAsyncLoader(async () => {
     setLoading(true)
     try {
       if (isPublicAppearanceReady()) {
         applyAppearance(getSidebarMenuAppearanceSnapshot())
+        applyIconSizes(getIconAppearanceSnapshot())
         const buttonRes = await fetchPublicButtonAppearance()
         if (buttonRes.ok && buttonRes.backgroundColor) {
           setButtonColor(buttonRes.backgroundColor)
@@ -118,11 +140,13 @@ export default function SidebarMenuAppearanceSettingsPage() {
         }
         return
       }
-      const [sidebarRes, buttonRes] = await Promise.all([
+      const [sidebarRes, buttonRes, iconRes] = await Promise.all([
         fetchPublicSidebarMenuAppearance(),
         fetchPublicButtonAppearance(),
+        fetchPublicIconAppearance(),
       ])
       if (sidebarRes.ok && sidebarRes.appearance) applyAppearance(sidebarRes.appearance)
+      if (iconRes.ok && iconRes.appearance) applyIconSizes(iconRes.appearance)
       if (buttonRes.ok && buttonRes.backgroundColor) {
         setButtonColor(buttonRes.backgroundColor)
         setSavedButtonColor(buttonRes.backgroundColor)
@@ -136,8 +160,58 @@ export default function SidebarMenuAppearanceSettingsPage() {
   const groups = getSidebarMenuEditorGroups()
   const hasSidebarColorChanges = !sidebarColorsEqual(appearance.colors, savedAppearance.colors)
   const hasButtonColorChanges = buttonColor !== savedButtonColor
-  const hasColorChanges = hasSidebarColorChanges || hasButtonColorChanges
+  const hasIconSizeChanges =
+    iconSizes.sidebarBoxPx !== savedIconSizes.sidebarBoxPx ||
+    iconSizes.appBoxPx !== savedIconSizes.appBoxPx
+  const hasColorChanges = hasSidebarColorChanges || hasButtonColorChanges || hasIconSizeChanges
   const busy = saving || loading || buttonSaving || Boolean(iconBusyKey)
+
+  const previewIconSizes = (next) => {
+    setIconSizes(next)
+    setIconAppearance(next)
+  }
+
+  const onSaveIconSizes = async () => {
+    if (!token) {
+      toast.error('You must be signed in to save.')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await updateIconAppearance(token, iconSizes)
+      if (!res.ok) {
+        toast.error(res.error || 'Could not save icon sizes.')
+        return
+      }
+      const next = res.appearance ?? iconSizes
+      rememberPublicIconAppearance(next, res.data)
+      applyIconSizes(next)
+      toast.success('Icon sizes saved.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onResetIconSizes = async () => {
+    if (!token) {
+      toast.error('You must be signed in.')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await resetIconAppearanceDefaults(token)
+      if (!res.ok) {
+        toast.error(res.error || 'Could not reset icon sizes.')
+        return
+      }
+      const next = res.appearance ?? { ...DEFAULT_ICON_APPEARANCE }
+      rememberPublicIconAppearance(next, res.data)
+      applyIconSizes(next)
+      toast.info('Icon sizes reset to defaults.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const refreshFromServer = async () => {
     const res = await fetchPublicSidebarMenuAppearance({ fresh: true })
@@ -179,6 +253,17 @@ export default function SidebarMenuAppearanceSettingsPage() {
         applyAppButtonColorToDocument({ buttonColor: nextColor })
       }
 
+      if (hasIconSizeChanges) {
+        const res = await updateIconAppearance(token, iconSizes)
+        if (!res.ok) {
+          toast.error(res.error || 'Could not save icon sizes.')
+          return
+        }
+        const next = res.appearance ?? iconSizes
+        rememberPublicIconAppearance(next, res.data)
+        applyIconSizes(next)
+      }
+
       toast.success('Appearance saved.')
     } finally {
       setSaving(false)
@@ -208,6 +293,10 @@ export default function SidebarMenuAppearanceSettingsPage() {
       if (hasButtonColorChanges) {
         setButtonColor(savedButtonColor)
         applyAppButtonColorToDocument({ buttonColor: savedButtonColor })
+      }
+      if (hasIconSizeChanges) {
+        setIconSizes(savedIconSizes)
+        setIconAppearance(savedIconSizes)
       }
       toast.info('Discarded unsaved changes.')
     } finally {
@@ -296,7 +385,7 @@ export default function SidebarMenuAppearanceSettingsPage() {
       <Card>
         <CardHeader
           title="Sidebar menu appearance"
-          subtitle="Set menu text colors, the app-wide button color, and custom icons. Menu names are fixed."
+          subtitle="Set menu text colors, icon sizes, the app-wide button color, and custom icons. Menu names are fixed."
           action={
             <Button type="button" onClick={() => void onSaveColors()} disabled={busy || !hasColorChanges}>
               {saving ? 'Saving…' : 'Save appearance'}
@@ -376,6 +465,59 @@ export default function SidebarMenuAppearanceSettingsPage() {
               </div>
             </div>
           </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <IconSizeSlider
+              label="Sidebar icon size"
+              hint="Controls icons in the left sidebar menu. Preview updates as you drag."
+              min={28}
+              max={100}
+              value={iconSizes.sidebarBoxPx}
+              onChange={(sidebarBoxPx) => previewIconSizes({ ...iconSizes, sidebarBoxPx })}
+              preview={
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 py-2">
+                  <NavIconTile navKey="dashboard" size="md" variant="sidebar" />
+                  <NavIconTile navKey="classes" size="md" variant="sidebar" />
+                  <span className="text-xs text-slate-500">Sidebar preview</span>
+                </div>
+              }
+            />
+            <IconSizeSlider
+              label="Application icon size"
+              hint="Controls dashboard tiles, page headings, and other icons across the app."
+              min={44}
+              max={100}
+              value={iconSizes.appBoxPx}
+              onChange={(appBoxPx) => previewIconSizes({ ...iconSizes, appBoxPx })}
+              preview={
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 py-2">
+                  <NavIconTile navKey="students" size="lg" />
+                  <NavIconTile navKey="teachers" size="lg" />
+                  <span className="text-xs text-slate-500">Dashboard / headings preview</span>
+                </div>
+              }
+            />
+          </div>
+
+          {hasIconSizeChanges ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-amber-700">
+                Icon size changed. Click <strong>Save appearance</strong> to apply for everyone.
+              </p>
+              <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => void onSaveIconSizes()}>
+                Save icon sizes only
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => void onResetIconSizes()}
+              >
+                Reset icon sizes
+              </Button>
+            </div>
+          ) : null}
 
           <div className="space-y-4">
             <div>

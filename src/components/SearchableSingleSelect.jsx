@@ -144,7 +144,7 @@ export function SearchableSingleSelect({
       onWheel={(e) => e.stopPropagation()}
     >
       {hideSearch ? null : (
-        <div className="shrink-0 border-b border-slate-100 p-2">
+        <div className="shrink-0 border-b border-slate-100 p-3">
           <Input
             id={id ? `${id}-search` : undefined}
             value={query}
@@ -152,6 +152,7 @@ export function SearchableSingleSelect({
             placeholder={searchPlaceholder}
             autoComplete="off"
             aria-label={searchPlaceholder}
+            className="min-h-[2.75rem] px-3.5 py-3 text-base"
           />
         </div>
       )}
