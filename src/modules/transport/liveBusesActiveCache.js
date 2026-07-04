@@ -43,7 +43,15 @@ export function upsertLiveBusCache(item) {
  * @param {import('./liveBusData').LiveBusListItem[]} items
  */
 export function setLiveBusesCache(items) {
-  if (!Array.isArray(items) || items.length === 0) return
+  if (!Array.isArray(items)) return
+  if (items.length === 0) {
+    try {
+      sessionStorage.removeItem(CACHE_KEY)
+    } catch {
+      /* quota / private mode */
+    }
+    return
+  }
   const now = new Date().toISOString()
   const byTrip = new Map(readLiveBusesCache().map((b) => [String(b.tripId), b]))
   for (const item of items) {

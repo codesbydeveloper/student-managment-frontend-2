@@ -494,26 +494,12 @@ export async function fetchLiveBusesList(token, role, options = {}) {
     }
 
     const apiBuses = res.buses.map(mapAdminLiveBusListItem).filter(Boolean)
-
-    const socketBuses = Array.isArray(options.socketBuses) ? options.socketBuses : []
-    const cached = readActiveLiveBusesCache()
-    const buses = mergeLiveBusListItems(apiBuses, socketBuses, cached)
-
-    if (apiBuses.length > 0) {
-      setLiveBusesCache(apiBuses)
-    } else if (buses.length > 0) {
-      for (const bus of buses) upsertLiveBusCache(bus)
-    }
+    setLiveBusesCache(apiBuses)
 
     return {
       ok: true,
-      count: buses.length,
-      buses,
-      fromCache: apiBuses.length === 0 && buses.length > 0,
-      warning:
-        apiBuses.length === 0 && buses.length > 0
-          ? 'Live list is empty on the server, but a trip may still be running until the driver taps End trip.'
-          : undefined,
+      count: res.count ?? apiBuses.length,
+      buses: apiBuses,
     }
   }
 

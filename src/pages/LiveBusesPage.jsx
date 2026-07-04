@@ -9,7 +9,6 @@ import { canUseAdminLiveBusesApi } from '../utils/permissions'
 import {
   findLiveBusCacheByBusNumericId,
   markLiveBusCacheEnded,
-  readActiveLiveBusesCache,
 } from '../modules/transport/liveBusesActiveCache'
 import { fetchLiveBusesList, mergeLiveBusListItems } from '../modules/transport/liveBusData'
 import { useAdminLiveBusesSocket } from '../modules/transport/useAdminLiveBusesSocket'
@@ -26,9 +25,6 @@ export default function LiveBusesPage() {
     const ids = new Set()
     for (const bus of buses) {
       if (bus.busNumericId != null) ids.add(bus.busNumericId)
-    }
-    for (const cached of readActiveLiveBusesCache()) {
-      if (cached.busNumericId != null) ids.add(cached.busNumericId)
     }
     return [...ids]
   }, [buses])
@@ -78,15 +74,16 @@ export default function LiveBusesPage() {
   useEffect(() => {
     if (!canUseAdminLive || socketBuses.length === 0) return
     setBuses((prev) => {
+      if (prev.length === 0) return prev
       const merged = mergeLiveBusListItems(prev, socketBuses)
       if (merged.length === prev.length) {
         const prevKey = prev.map((b) => b.tripId).join('|')
         const mergedKey = merged.map((b) => b.tripId).join('|')
         if (prevKey === mergedKey) return prev
       }
+      setCount(merged.length)
       return merged
     })
-    setCount((prev) => Math.max(prev, socketBuses.length))
   }, [socketBuses, canUseAdminLive])
 
   const handleRefresh = () => {
