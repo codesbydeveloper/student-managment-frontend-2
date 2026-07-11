@@ -1,2 +1,2 @@
-fullName,email,phone,password,active
-Riley Morgan,riley.morgan@school.test,555-0301,Secret01,yes
+fullName,email,phone,password,fatherName,fatherPhone,motherName,motherPhone,guardianName,guardianPhone,active
+Priya Sharma,priya.sharma@gmail.com,9823456781,Parent@2026,Rajesh Sharma,9812345678,Sunita Sharma,9765432109,Anil Verma,9890123456,yes

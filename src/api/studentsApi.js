@@ -577,13 +577,10 @@ export async function importStudentsCsv(token, file) {
     })
     const data = await res.json().catch(() => null)
     if (!res.ok) {
-      const errMsg = formatMutationError(data, res.status)
-      const useClient =
-        [404, 405, 501, 400, 422].includes(res.status) ||
-        /invalid.*csv|email|column|required/i.test(String(errMsg))
+      const useClient = [404, 405, 501].includes(res.status)
       return {
         ok: false,
-        error: errMsg,
+        error: formatMutationError(data, res.status),
         useClient,
       }
     }
@@ -592,6 +589,90 @@ export async function importStudentsCsv(token, file) {
     const msg =
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg, useClient: true }
+  }
+}
+
+function readImportCount(data, keys) {
+  if (!data || typeof data !== 'object') return null
+  for (const key of keys) {
+    const n = Number(data[key])
+    if (Number.isFinite(n) && n >= 0) return n
+  }
+  return null
+}
+
+function readImportCountsFromMessage(message) {
+  const m = String(message ?? '')
+  const added = m.match(/(\d+)\s+added\b/i)
+  const duplicated = m.match(/(\d+)\s+duplicat/i)
+  const incorrect = m.match(/(\d+)\s+incorrect/i)
+  return {
+    added: added ? Number(added[1]) : null,
+    duplicated: duplicated ? Number(duplicated[1]) : null,
+    incorrect: incorrect ? Number(incorrect[1]) : null,
+  }
+}
+
+/**
+ * Normalize POST /api/students/import/csv response for UI toasts + result drawer.
+ * @param {unknown} data
+ */
+export function parseStudentCsvImportResult(data) {
+  const message = typeof data?.message === 'string' ? data.message.trim() : ''
+  const fromMsg = readImportCountsFromMessage(message)
+
+  const added =
+    readImportCount(data, ['added', 'imported', 'created', 'count']) ?? fromMsg.added ?? 0
+  const duplicated =
+    readImportCount(data, ['duplicated', 'duplicate', 'duplicateCount', 'duplicates']) ??
+    fromMsg.duplicated ??
+    0
+  const incorrect =
+    readImportCount(data, ['incorrect', 'invalid', 'failed', 'incorrectCount', 'errorCount']) ??
+    fromMsg.incorrect ??
+    0
+
+  /** @type {string[]} */
+  const rowErrors = []
+  const errList = data?.errors ?? data?.rowErrors ?? data?.incorrectRows ?? data?.details
+  if (Array.isArray(errList)) {
+    for (const item of errList) {
+      if (typeof item === 'string') {
+        rowErrors.push(item)
+        continue
+      }
+      if (!item || typeof item !== 'object') continue
+      const line = item.row ?? item.line ?? item.index ?? item.rowNumber
+      const msg = item.message ?? item.error ?? item.reason ?? item.detail
+      if (msg) rowErrors.push(line != null ? `Row ${line}: ${msg}` : String(msg))
+    }
+  }
+
+  let variant = 'success'
+  if (added <= 0) {
+    variant = incorrect > 0 || !message ? 'error' : duplicated > 0 ? 'warning' : 'error'
+  } else if (incorrect > 0 || duplicated > 0) {
+    variant = 'warning'
+  }
+
+  const summary =
+    message ||
+    (added > 0
+      ? `Imported ${added} student(s).`
+      : incorrect > 0
+        ? `Import failed — ${incorrect} row(s) had incorrect data.`
+        : duplicated > 0
+          ? `No new students — ${duplicated} duplicate row(s).`
+          : 'No students were imported.')
+
+  return {
+    variant,
+    message: summary,
+    added,
+    duplicated,
+    incorrect,
+    rowErrors,
+    shouldRefresh: added > 0,
   }
 }
 

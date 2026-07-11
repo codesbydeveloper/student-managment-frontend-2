@@ -1,2 +1,2 @@
-fullName,room,parentEmail,active
-Jordan Lee,12,parent@school.com,yes
+fullName,gender,dateOfBirth,bloodGroup,studentAddress,grade,section,parentEmail,active
+Jordan Lee,Male,2015-03-15,O+,"12 Main St, City",1,A,parent@school.com,yes

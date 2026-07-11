@@ -17,6 +17,7 @@ import {
   fetchStudentsList,
   importStudentsCsv,
   mapApiStudentToRow,
+  parseStudentCsvImportResult,
   updateStudent,
 } from '../../api/studentsApi'
 import { useAuth } from '../../context/AuthContext'
@@ -74,8 +75,18 @@ function studentFormFromRow(row) {
 }
 
 /** Must match POST /api/students/import/csv column names. */
-const STUDENT_IMPORT_CSV_HEADERS = ['fullName', 'room', 'parentEmail', 'active']
-const STUDENT_IMPORT_CSV_REQUIRED = ['fullName']
+const STUDENT_IMPORT_CSV_HEADERS = [
+  'fullName',
+  'gender',
+  'dateOfBirth',
+  'bloodGroup',
+  'studentAddress',
+  'grade',
+  'section',
+  'parentEmail',
+  'active',
+]
+const STUDENT_IMPORT_CSV_REQUIRED = ['fullName', 'gender', 'dateOfBirth']
 
 function newId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return `s-${crypto.randomUUID()}`
@@ -95,10 +106,32 @@ function parseCsvActive(value) {
   return s === 'yes' || s === 'true' || s === '1' || s === 'y'
 }
 
-function resolveClassIdFromRoom(roomRaw, classes) {
-  const r = String(roomRaw ?? '').trim()
-  if (!r) return ''
-  const match = classes.find((c) => String(c.room ?? '').trim() === r)
+function normalizeCsvGender(value) {
+  const s = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+  if (s === 'male' || s === 'm') return 'male'
+  if (s === 'female' || s === 'f') return 'female'
+  if (s === 'third_gender' || s === 'thirdgender') return 'third_gender'
+  return String(value ?? '').trim()
+}
+
+function genderLabelForExport(gender) {
+  const g = String(gender ?? '').trim().toLowerCase()
+  const opt = STUDENT_GENDER_OPTIONS.find((o) => o.value === g)
+  return opt ? opt.label : String(gender ?? '').trim()
+}
+
+function resolveClassIdFromGradeSection(gradeRaw, sectionRaw, classes) {
+  const grade = String(gradeRaw ?? '').trim()
+  const section = String(sectionRaw ?? '').trim()
+  if (!grade || !section) return ''
+  const match = classes.find(
+    (c) =>
+      String(c.gradeLevel ?? '').trim() === grade &&
+      String(c.section ?? '').trim().toUpperCase() === section.toUpperCase(),
+  )
   return match ? String(match.id) : ''
 }
 
@@ -111,12 +144,35 @@ function resolveParentIdFromEmail(emailRaw, parents) {
 
 function csvRowToStudentDraft(row) {
   const fullName = pickCsvField(row, ['fullname', 'full_name', 'name', 'student'])
-  const room = pickCsvField(row, ['room', 'class_room'])
+  const gender = normalizeCsvGender(pickCsvField(row, ['gender', 'sex']))
+  const dateOfBirth = pickCsvField(row, [
+    'dateofbirth',
+    'date_of_birth',
+    'dob',
+    'birthdate',
+    'birth_date',
+  ])
+  const bloodGroup = pickCsvField(row, ['bloodgroup', 'blood_group', 'blood'])
+  const studentAddress = pickCsvField(row, ['studentaddress', 'student_address', 'address'])
+  const grade = pickCsvField(row, ['grade', 'gradelevel', 'grade_level', 'class_grade'])
+  const section = pickCsvField(row, ['section', 'class_section'])
   const parentEmail = pickCsvField(row, ['parentemail', 'parent_email']).toLowerCase()
   const classIdLegacy = pickCsvField(row, ['classid', 'class_id', 'class'])
   const parentIdLegacy = pickCsvField(row, ['parentid', 'parent_id'])
   const active = parseCsvActive(pickCsvField(row, ['active', 'is_active', 'isactive']) || 'yes')
-  return { fullName, room, parentEmail, classIdLegacy, parentIdLegacy, active }
+  return {
+    fullName,
+    gender,
+    dateOfBirth,
+    bloodGroup,
+    studentAddress,
+    grade,
+    section,
+    parentEmail,
+    classIdLegacy,
+    parentIdLegacy,
+    active,
+  }
 }
 
 /** Row-by-row import when server CSV import is unavailable or rejects the file. */
@@ -137,7 +193,9 @@ async function importStudentsFromCsvFileClient(token, file, { classes = [], pare
   for (const row of csvRows) {
     const d = csvRowToStudentDraft(row)
     const nameErr = required(d.fullName, 'Full name')
-    if (nameErr) {
+    const genderErr = required(d.gender, 'Gender')
+    const dobErr = required(d.dateOfBirth, 'Date of birth')
+    if (nameErr || genderErr || dobErr) {
       skipped++
       continue
     }
@@ -159,10 +217,14 @@ async function importStudentsFromCsvFileClient(token, file, { classes = [], pare
   let stopped = false
   let lastError = ''
   for (const d of drafts) {
-    const classId = d.classIdLegacy || resolveClassIdFromRoom(d.room, classes)
+    const classId = d.classIdLegacy || resolveClassIdFromGradeSection(d.grade, d.section, classes)
     const parentId = d.parentIdLegacy || resolveParentIdFromEmail(d.parentEmail, parents)
     const res = await createStudent(token, {
       fullName: d.fullName,
+      gender: d.gender,
+      dateOfBirth: d.dateOfBirth,
+      bloodGroup: d.bloodGroup,
+      studentAddress: d.studentAddress,
       classId: classId || undefined,
       parentId: parentId || undefined,
       active: d.active,
@@ -365,6 +427,7 @@ export function StudentsModule() {
   const [exportClassesList, setExportClassesList] = useState([])
   const [exportClassesLoading, setExportClassesLoading] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importResult, setImportResult] = useState(null)
   const [importingCsv, setImportingCsv] = useState(false)
   const [importFileLabel, setImportFileLabel] = useState('')
   const [pendingImportFile, setPendingImportFile] = useState(null)
@@ -606,12 +669,22 @@ export function StudentsModule() {
     URL.revokeObjectURL(url)
   }
 
-  const roomForClassId = useCallback(
+  const gradeForClassId = useCallback(
     (classId) => {
       const cid = String(classId ?? '').trim()
       if (!cid) return ''
       const c = classes.find((x) => String(x.id) === cid)
-      return c ? String(c.room ?? '').trim() : ''
+      return c ? String(c.gradeLevel ?? '').trim() : ''
+    },
+    [classes],
+  )
+
+  const sectionForClassId = useCallback(
+    (classId) => {
+      const cid = String(classId ?? '').trim()
+      if (!cid) return ''
+      const c = classes.find((x) => String(x.id) === cid)
+      return c ? String(c.section ?? '').trim() : ''
     },
     [classes],
   )
@@ -631,7 +704,12 @@ export function StudentsModule() {
     const lines = list.map((s) =>
       [
         s.fullName,
-        roomForClassId(s.classId),
+        genderLabelForExport(s.gender),
+        s.dateOfBirth || '',
+        s.bloodGroup || '',
+        s.studentAddress || '',
+        gradeForClassId(s.classId),
+        sectionForClassId(s.classId),
         parentEmailForId(s.parentId),
         s.active !== false ? 'yes' : 'no',
       ]
@@ -896,17 +974,28 @@ export function StudentsModule() {
     setImportFileLabel(file.name)
   }
 
-  const finishImportSuccess = async (detail) => {
-    toast.success(detail)
+  const finishImportFlow = async (result) => {
     setImportModalOpen(false)
     setImportFileLabel('')
     setPendingImportFile(null)
     setCsvInputKey((k) => k + 1)
-    if (remoteStudents !== undefined) {
+    setImportResult(result)
+
+    if (result.variant === 'success') {
+      toast.success(result.message, { autoClose: 5000 })
+    } else if (result.variant === 'warning') {
+      toast.warning(result.message, { autoClose: 7000 })
+    } else {
+      toast.error(result.message, { autoClose: 8000 })
+    }
+
+    if (result.shouldRefresh && remoteStudents !== undefined) {
       setStudentPage(1)
       await loadStudentsPage(1)
     }
   }
+
+  const closeImportResultModal = () => setImportResult(null)
 
   const confirmImportStudents = async () => {
     if (!pendingImportFile || importingCsv) return
@@ -918,28 +1007,33 @@ export function StudentsModule() {
     try {
       const apiRes = await importStudentsCsv(token, pendingImportFile)
       if (apiRes.ok) {
-        const d = apiRes.data
-        const detail =
-          typeof d?.message === 'string' && d.message
-            ? d.message
-            : typeof d?.imported === 'number'
-              ? `Imported ${d.imported} student(s).`
-              : 'Students imported from file.'
-        await finishImportSuccess(detail)
+        await finishImportFlow(parseStudentCsvImportResult(apiRes.data))
         return
       }
+      if (!apiRes.useClient) {
+        toast.error(apiRes.error)
+        return
+      }
+      toast.info('Server import unavailable — importing from this device instead.')
 
       const clientRes = await importStudentsFromCsvFileClient(token, pendingImportFile, {
         classes,
         parents,
       })
       if (clientRes.ok) {
-        if (!apiRes.useClient) {
-          toast.info('Imported from your file (server import was unavailable).')
-        }
-        await finishImportSuccess(
-          `Imported ${clientRes.created} student(s).${clientRes.skipped ? ` ${clientRes.skipped} row(s) skipped.` : ''}${clientRes.stopped ? ' Import stopped after an error.' : ''}`,
-        )
+        const created = clientRes.created ?? 0
+        const skipped = clientRes.skipped ?? 0
+        const variant =
+          created <= 0 ? 'error' : skipped > 0 || clientRes.stopped ? 'warning' : 'success'
+        await finishImportFlow({
+          variant,
+          message: `Imported ${created} student(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}${clientRes.stopped ? ' Import stopped after an error.' : ''}`,
+          added: created,
+          duplicated: 0,
+          incorrect: skipped,
+          rowErrors: clientRes.stopped ? ['Import stopped after an error on the server.'] : [],
+          shouldRefresh: created > 0,
+        })
         return
       }
 
@@ -1372,7 +1466,17 @@ export function StudentsModule() {
           <CsvImportGuideTable
             headers={STUDENT_IMPORT_CSV_HEADERS}
             requiredHeaders={STUDENT_IMPORT_CSV_REQUIRED}
-            exampleRow={['Jordan Lee', '12', 'parent@school.com', 'yes']}
+            exampleRow={[
+              'Jordan Lee',
+              'Male',
+              '2015-03-15',
+              'O+',
+              '12 Main St, City',
+              '1',
+              'A',
+              'parent@school.com',
+              'yes',
+            ]}
             
             sampleHref="/students-import-sample.csv"
           />
@@ -1409,6 +1513,79 @@ export function StudentsModule() {
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={importResult != null}
+        onClose={closeImportResultModal}
+        title="Import results"
+        size="md"
+        footer={
+          <div className="flex w-full justify-end">
+            <Button type="button" className="min-w-[6.5rem]" onClick={closeImportResultModal}>
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {importResult ? (
+          <div className="space-y-4">
+            <div
+              className={`rounded-xl border px-4 py-3 ${
+                importResult.variant === 'error'
+                  ? 'border-red-200 bg-red-50'
+                  : importResult.variant === 'warning'
+                    ? 'border-amber-200 bg-amber-50'
+                    : 'border-emerald-200 bg-emerald-50'
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold ${
+                  importResult.variant === 'error'
+                    ? 'text-red-900'
+                    : importResult.variant === 'warning'
+                      ? 'text-amber-950'
+                      : 'text-emerald-950'
+                }`}
+              >
+                {importResult.message}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">Added</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-emerald-950">{importResult.added}</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Duplicated</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-amber-950">{importResult.duplicated}</p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50/80 px-3 py-2.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-red-800">Incorrect</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-red-950">{importResult.incorrect}</p>
+              </div>
+            </div>
+
+            {importResult.rowErrors.length > 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Row details</p>
+                <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto text-sm text-slate-700">
+                  {importResult.rowErrors.map((line) => (
+                    <li key={line} className="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-slate-200/80">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : importResult.variant !== 'success' ? (
+              <p className="text-sm text-slate-600">
+                Fix the rows in your CSV and try importing again. Required columns: fullName, gender, and
+                dateOfBirth.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </Modal>
 
       <Modal

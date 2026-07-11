@@ -8,6 +8,7 @@ import {
   fetchParentsList,
   importParentsCsv,
   mapApiParentToRow,
+  parseParentCsvImportResult,
   updateParent,
 } from '../../api/parentsApi'
 import { fetchStudentsPicker, formatStudentPickerClassSubtext } from '../../api/studentsApi'
@@ -32,6 +33,22 @@ import { formatActivityTimestamp } from '../../utils/lastActivityDisplay'
 
 const PARENT_PAGE_LIMIT = 10
 const LOCAL_PARENT_PAGE_SIZE = 5
+
+/** Must match POST /api/parents/import/csv column names. */
+const PARENT_IMPORT_CSV_HEADERS = [
+  'fullName',
+  'email',
+  'phone',
+  'password',
+  'fatherName',
+  'fatherPhone',
+  'motherName',
+  'motherPhone',
+  'guardianName',
+  'guardianPhone',
+  'active',
+]
+const PARENT_IMPORT_CSV_REQUIRED = ['fullName', 'email', 'phone', 'password']
 
 const EMPTY_PARENT_FORM = {
   fullName: '',
@@ -95,10 +112,18 @@ function parseCsvActive(value) {
 }
 
 function csvRowToParentDraft(row) {
-  const fullName = pickCsvField(row, ['name', 'full_name', 'fullname', 'guardian'])
-  const emailVal = pickCsvField(row, ['email']).toLowerCase()
-  const phone = sanitizePhoneDigits(pickCsvField(row, ['phone', 'number', 'mobile']))
+  const fullName = pickCsvField(row, ['fullname', 'full_name', 'name', 'guardian'])
+  const emailVal = pickCsvField(row, ['email', 'primaryemail', 'primary_email']).toLowerCase()
+  const phone = sanitizePhoneDigits(
+    pickCsvField(row, ['phone', 'primaryphone', 'primary_phone', 'number', 'mobile']),
+  )
   const password = pickCsvField(row, ['password'])
+  const fatherName = pickCsvField(row, ['fathername', 'father_name'])
+  const fatherPhone = sanitizePhoneDigits(pickCsvField(row, ['fatherphone', 'father_phone']))
+  const motherName = pickCsvField(row, ['mothername', 'mother_name'])
+  const motherPhone = sanitizePhoneDigits(pickCsvField(row, ['motherphone', 'mother_phone']))
+  const guardianName = pickCsvField(row, ['guardianname', 'guardian_name'])
+  const guardianPhone = sanitizePhoneDigits(pickCsvField(row, ['guardianphone', 'guardian_phone']))
   const active = parseCsvActive(pickCsvField(row, ['active', 'is_active', 'isactive']) || 'yes')
   const studentsRaw =
     pickCsvField(row, ['linked_students', 'student_ids', 'students', 'linkedstudentids']) || ''
@@ -106,7 +131,20 @@ function csvRowToParentDraft(row) {
     .split(/[;,]/)
     .map((s) => s.trim())
     .filter(Boolean)
-  return { fullName, email: emailVal, phone, password, active, studentIds }
+  return {
+    fullName,
+    email: emailVal,
+    phone,
+    password,
+    fatherName,
+    fatherPhone,
+    motherName,
+    motherPhone,
+    guardianName,
+    guardianPhone,
+    active,
+    studentIds,
+  }
 }
 
 function newId() {
@@ -223,6 +261,7 @@ export function ParentsModule() {
   const [exportWho, setExportWho] = useState('any')
   const [exportLoading, setExportLoading] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importResult, setImportResult] = useState(null)
   const [importingCsv, setImportingCsv] = useState(false)
   const [importFileLabel, setImportFileLabel] = useState('')
   const [pendingImportFile, setPendingImportFile] = useState(null)
@@ -368,13 +407,24 @@ export function ParentsModule() {
   }
 
   const downloadParentsCsv = (list, filename) => {
-    const header = ['fullName', 'email', 'phone', 'studentIds', 'active']
-    const lines = list.map((p) => {
-      const sids = (Array.isArray(p.studentIds) ? p.studentIds : []).join(';')
-      return [p.fullName, p.email, p.phone || '', sids, p.active !== false ? 'yes' : 'no']
+    const header = PARENT_IMPORT_CSV_HEADERS
+    const lines = list.map((p) =>
+      [
+        p.fullName,
+        p.email,
+        p.phone || p.primaryPhone || '',
+        '',
+        p.fatherName || '',
+        p.fatherPhone || '',
+        p.motherName || '',
+        p.motherPhone || '',
+        p.guardianName || '',
+        p.guardianPhone || '',
+        p.active !== false ? 'yes' : 'no',
+      ]
         .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-        .join(',')
-    })
+        .join(','),
+    )
     const csv = [header.join(','), ...lines].join('\n')
     downloadBlobFile(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename)
   }
@@ -500,6 +550,30 @@ export function ParentsModule() {
     setImportFileLabel(file.name)
   }
 
+  const finishImportFlow = async (result) => {
+    const fileName = importFileLabel || pendingImportFile?.name || ''
+    setImportModalOpen(false)
+    setImportFileLabel('')
+    setPendingImportFile(null)
+    setCsvInputKey((k) => k + 1)
+    setImportResult({ ...result, fileName })
+
+    if (result.variant === 'success') {
+      toast.success(result.message, { autoClose: 5000 })
+    } else if (result.variant === 'warning') {
+      toast.warning(result.message, { autoClose: 7000 })
+    } else {
+      toast.error(result.message, { autoClose: 8000 })
+    }
+
+    if (result.shouldRefresh && remoteParents !== undefined) {
+      setParentPage(1)
+      await loadParentsPage(1)
+    }
+  }
+
+  const closeImportResultModal = () => setImportResult(null)
+
   const confirmImportParents = async () => {
     if (!pendingImportFile || importingCsv) return
     if (!token) {
@@ -510,22 +584,7 @@ export function ParentsModule() {
     try {
       const apiRes = await importParentsCsv(token, pendingImportFile)
       if (apiRes.ok) {
-        const d = apiRes.data
-        const detail =
-          typeof d?.message === 'string' && d.message
-            ? d.message
-            : typeof d?.imported === 'number'
-              ? `Imported ${d.imported} parent(s).`
-              : 'Parents imported from file.'
-        toast.success(detail)
-        setImportModalOpen(false)
-        setImportFileLabel('')
-        setPendingImportFile(null)
-        setCsvInputKey((k) => k + 1)
-        if (remoteParents !== undefined) {
-          setParentPage(1)
-          await loadParentsPage(1)
-        }
+        await finishImportFlow(parseParentCsvImportResult(apiRes.data))
         return
       }
       if (!apiRes.useClient) {
@@ -553,8 +612,9 @@ export function ParentsModule() {
         const d = csvRowToParentDraft(row)
         const e1 = required(d.fullName, 'Full name')
         const e2 = required(d.email, 'Email') || email(d.email)
-        const e3 = required(d.password, 'Password') || minLength(d.password, 6, 'Password')
-        if (e1 || e2 || e3) {
+        const e3 = phone10Digits(d.phone, 'Primary phone number', { required: true })
+        const e4 = required(d.password, 'Password') || minLength(d.password, 6, 'Password')
+        if (e1 || e2 || e3 || e4) {
           skipped++
           continue
         }
@@ -579,6 +639,14 @@ export function ParentsModule() {
           phone: d.phone || '',
           password: d.password,
           studentIds: d.studentIds,
+          fatherName: d.fatherName,
+          fatherPhone: d.fatherPhone,
+          motherName: d.motherName,
+          motherPhone: d.motherPhone,
+          guardianName: d.guardianName,
+          guardianPhone: d.guardianPhone,
+          primaryPhone: d.phone,
+          primaryEmail: d.email,
         })
         if (!res.ok) {
           toast.error(res.error)
@@ -588,18 +656,28 @@ export function ParentsModule() {
         created++
       }
       if (created) {
-        toast.success(
-          `Imported ${created} parent(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}${stopped ? ' Import stopped after an error.' : ''}`,
-        )
-        setImportModalOpen(false)
-        setImportFileLabel('')
-        setPendingImportFile(null)
-        setCsvInputKey((k) => k + 1)
-        if (remoteParents !== undefined) {
-          setParentPage(1)
-          await loadParentsPage(1)
-        }
+        const variant =
+          created <= 0 ? 'error' : skipped > 0 || stopped ? 'warning' : 'success'
+        await finishImportFlow({
+          variant,
+          message: `Imported ${created} parent(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}${stopped ? ' Import stopped after an error.' : ''}`,
+          added: created,
+          duplicated: 0,
+          incorrect: skipped,
+          rowErrors: stopped ? ['Import stopped after an error on the server.'] : [],
+          shouldRefresh: created > 0,
+        })
       } else if (stopped) {
+        await finishImportFlow({
+          variant: 'error',
+          message: 'No parents were imported.',
+          added: 0,
+          duplicated: 0,
+          incorrect: skipped,
+          rowErrors: [],
+          shouldRefresh: false,
+        })
+      } else {
         toast.error('No parents were imported.')
       }
     } finally {
@@ -1027,9 +1105,21 @@ export function ParentsModule() {
       >
         <div className="space-y-4">
           <CsvImportGuideTable
-            headers={['fullName', 'email', 'phone', 'password', 'active']}
-            requiredHeaders={['fullName', 'email', 'password']}
-            exampleRow={['Riley Morgan', 'riley@school.test', '5550301', 'Secret01', 'yes']}
+            headers={PARENT_IMPORT_CSV_HEADERS}
+            requiredHeaders={PARENT_IMPORT_CSV_REQUIRED}
+            exampleRow={[
+              'Priya Sharma',
+              'priya.sharma@gmail.com',
+              '9823456781',
+              'Parent@2026',
+              'Rajesh Sharma',
+              '9812345678',
+              'Sunita Sharma',
+              '9765432109',
+              'Anil Verma',
+              '9890123456',
+              'yes',
+            ]}
             sampleHref="/parents-import-sample.csv"
           />
           <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-6 text-center">
@@ -1065,6 +1155,84 @@ export function ParentsModule() {
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={importResult != null}
+        onClose={closeImportResultModal}
+        title="Import results"
+        size="md"
+        footer={
+          <div className="flex w-full justify-end">
+            <Button type="button" className="min-w-[6.5rem]" onClick={closeImportResultModal}>
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {importResult ? (
+          <div className="space-y-4">
+            {importResult.fileName ? (
+              <p className="truncate text-xs font-medium text-slate-500">
+                CSV file: <span className="text-slate-700">{importResult.fileName}</span>
+              </p>
+            ) : null}
+            <div
+              className={`rounded-xl border px-4 py-3 ${
+                importResult.variant === 'error'
+                  ? 'border-red-200 bg-red-50'
+                  : importResult.variant === 'warning'
+                    ? 'border-amber-200 bg-amber-50'
+                    : 'border-emerald-200 bg-emerald-50'
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold ${
+                  importResult.variant === 'error'
+                    ? 'text-red-900'
+                    : importResult.variant === 'warning'
+                      ? 'text-amber-950'
+                      : 'text-emerald-950'
+                }`}
+              >
+                {importResult.message}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">Added</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-emerald-950">{importResult.added}</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Duplicated</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-amber-950">{importResult.duplicated}</p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50/80 px-3 py-2.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-red-800">Incorrect</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-red-950">{importResult.incorrect}</p>
+              </div>
+            </div>
+
+            {importResult.rowErrors.length > 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Row details</p>
+                <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto text-sm text-slate-700">
+                  {importResult.rowErrors.map((line) => (
+                    <li key={line} className="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-slate-200/80">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : importResult.variant !== 'success' ? (
+              <p className="text-sm text-slate-600">
+                Fix the rows in your CSV and try importing again. Required columns: fullName, email, phone, and
+                password.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </Modal>
 
       <Modal

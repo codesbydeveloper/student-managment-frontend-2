@@ -218,7 +218,7 @@ export function SearchableMultiSelect({
               onClick={closePanel}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
-              Cancel
+              {value.length > 0 ? 'Select' : 'Cancel'}
             </button>
           </div>
         </div>
