@@ -6,14 +6,23 @@ import { useScreenWakeLock } from '../../hooks/useScreenWakeLock'
 export function DriverKeepAwakeToggle() {
   const { active, supported, toggle } = useScreenWakeLock()
 
-  if (!supported) return null
+  if (!supported) {
+    return (
+      <p
+        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+        title="Open this page in Chrome or Safari over HTTPS to keep the screen on."
+      >
+        Keep screen on is not available in this browser.
+      </p>
+    )
+  }
 
   return (
     <button
       type="button"
       role="switch"
       aria-checked={active}
-      aria-label={active ? 'Turn keep phone unlocked off' : 'Keep phone unlocked while driving'}
+      aria-label={active ? 'Turn keep screen on off' : 'Keep screen on while driving'}
       onClick={() => void toggle()}
       className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 ${
         active
@@ -32,7 +41,7 @@ export function DriverKeepAwakeToggle() {
           }`}
         />
       </span>
-      <span>{active ? 'Keep unlocked: On' : 'Keep phone unlocked'}</span>
+      <span>{active ? 'Screen on: Active' : 'Keep screen on'}</span>
     </button>
   )
 }

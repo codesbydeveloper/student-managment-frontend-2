@@ -1,75 +1,115 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
+import {
+  acquireScreenKeepAwake,
+  isLikelyMobileDevice,
+  isScreenKeepAwakeSupported,
+  reacquireWakeLock,
+  releaseScreenKeepAwake,
+} from '../utils/screenKeepAwake'
 
 /**
- * Screen Wake Lock API — keeps the device screen on while the driver map is open.
- * @returns {{ active: boolean, supported: boolean, toggle: () => Promise<void> }}
+ * Keeps the device screen on while the driver map is open.
+ * Uses Screen Wake Lock when available, plus a video fallback for older/mobile browsers.
+ * @returns {{ active: boolean, supported: boolean, method: import('../utils/screenKeepAwake').ScreenKeepAwakeMethod | null, toggle: () => Promise<void> }}
  */
 export function useScreenWakeLock() {
   const [active, setActive] = useState(false)
   const [supported, setSupported] = useState(false)
+  const [method, setMethod] = useState(null)
   const lockRef = useRef(null)
   const wantActiveRef = useRef(false)
+  const acquiringRef = useRef(false)
+
+  const syncActive = useCallback((nextActive, nextMethod = null) => {
+    setActive(nextActive)
+    setMethod(nextActive ? nextMethod : null)
+  }, [])
+
+  const onWakeLockReleaseRef = useRef(null)
+  onWakeLockReleaseRef.current = () => {
+    lockRef.current = null
+    if (!wantActiveRef.current) {
+      syncActive(false)
+      return
+    }
+    if (document.visibilityState !== 'visible' || acquiringRef.current) return
+
+    acquiringRef.current = true
+    void reacquireWakeLock(() => onWakeLockReleaseRef.current?.())
+      .then((lock) => {
+        lockRef.current = lock
+        if (lock) {
+          syncActive(true, isLikelyMobileDevice() ? 'both' : 'wake-lock')
+        } else if (wantActiveRef.current && isLikelyMobileDevice()) {
+          syncActive(true, 'fallback')
+        } else {
+          syncActive(false)
+        }
+      })
+      .finally(() => {
+        acquiringRef.current = false
+      })
+  }
+
+  const onWakeLockRelease = useCallback(() => {
+    onWakeLockReleaseRef.current?.()
+  }, [])
+
+  const acquire = useCallback(async () => {
+    if (acquiringRef.current) return false
+    acquiringRef.current = true
+    try {
+      const result = await acquireScreenKeepAwake(onWakeLockRelease)
+      lockRef.current = result.wakeLock
+      if (result.ok) {
+        syncActive(true, result.method)
+        return true
+      }
+      return false
+    } finally {
+      acquiringRef.current = false
+    }
+  }, [onWakeLockRelease, syncActive])
 
   const release = useCallback(async () => {
-    try {
-      await lockRef.current?.release()
-    } catch {
-      /* ignore */
-    }
+    wantActiveRef.current = false
+    releaseScreenKeepAwake(lockRef.current)
     lockRef.current = null
-    setActive(false)
-  }, [])
-
-  const request = useCallback(async () => {
-    if (!navigator.wakeLock) {
-      toast.error('Keep awake is not supported in this browser.')
-      return false
-    }
-    try {
-      const lock = await navigator.wakeLock.request('screen')
-      lockRef.current = lock
-      setActive(true)
-      lock.addEventListener('release', () => {
-        lockRef.current = null
-        setActive(false)
-      })
-      return true
-    } catch {
-      toast.error('Could not keep screen awake. Stay on this page and try again.')
-      return false
-    }
-  }, [])
+    syncActive(false)
+  }, [syncActive])
 
   const toggle = useCallback(async () => {
     if (active || wantActiveRef.current) {
-      wantActiveRef.current = false
       await release()
       return
     }
     wantActiveRef.current = true
-    const ok = await request()
-    if (!ok) wantActiveRef.current = false
-  }, [active, request, release])
+    const ok = await acquire()
+    if (!ok) {
+      wantActiveRef.current = false
+      toast.error('Could not keep screen on. Use HTTPS, stay on this page, and try again.')
+    }
+  }, [active, acquire, release])
 
   useEffect(() => {
-    setSupported(typeof navigator !== 'undefined' && 'wakeLock' in navigator)
+    setSupported(isScreenKeepAwakeSupported())
     return () => {
       wantActiveRef.current = false
-      void release()
+      releaseScreenKeepAwake(lockRef.current)
+      lockRef.current = null
     }
-  }, [release])
+  }, [])
 
-  /** Browsers release wake lock when the tab is hidden — re-acquire when visible again. */
+  /** Re-acquire after tab/app switch — wake lock is dropped when the page is hidden. */
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'visible' && wantActiveRef.current && !lockRef.current) {
-        void request()
-      }
+      if (document.visibilityState !== 'visible' || !wantActiveRef.current || acquiringRef.current) return
+      void acquire()
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [request])
+  }, [acquire])
 
-  return { active, supported, toggle }
+  return { active, supported, method, toggle }
 }

@@ -145,19 +145,60 @@ export function useDriverLiveTracking({ busId, driverUserId, tripActive, token }
       setGeoError(err?.message || `Geolocation error (${err?.code ?? 'unknown'})`)
     }
 
+    const startGeoWatch = () => {
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+        watchIdRef.current = null
+      }
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => onGeoSuccess(pos, false),
+        onGeoError,
+        geoOpts,
+      )
+    }
+
+    /** After a phone call or app switch, Android/iOS may pause GPS — restart watch + ping immediately. */
+    const resumeTracking = () => {
+      if (document.visibilityState !== 'visible') return
+
+      const activeSocket = socketRef.current
+      if (activeSocket && !activeSocket.connected) {
+        activeSocket.connect()
+      }
+
+      startGeoWatch()
+      navigator.geolocation.getCurrentPosition(
+        (pos) => onGeoSuccess(pos, true),
+        onGeoError,
+        geoOpts,
+      )
+    }
+
+    let resumeTimer = null
+    const scheduleResume = () => {
+      if (document.visibilityState !== 'visible') return
+      window.clearTimeout(resumeTimer)
+      resumeTimer = window.setTimeout(resumeTracking, 150)
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => onGeoSuccess(pos, true),
       onGeoError,
       geoOpts,
     )
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => onGeoSuccess(pos, false),
-      onGeoError,
-      geoOpts,
-    )
+    startGeoWatch()
+
+    document.addEventListener('visibilitychange', scheduleResume)
+    window.addEventListener('pageshow', scheduleResume)
+    window.addEventListener('focus', scheduleResume)
 
     return () => {
+      window.clearTimeout(resumeTimer)
+      document.removeEventListener('visibilitychange', scheduleResume)
+      window.removeEventListener('pageshow', scheduleResume)
+      window.removeEventListener('focus', scheduleResume)
+
       const last = lastGeoRef.current
       const bid = String(busId ?? '').trim()
       const now = Date.now()
