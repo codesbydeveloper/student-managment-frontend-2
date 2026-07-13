@@ -440,7 +440,9 @@ export default function PickUpPointsPage() {
       dropLocation: editDropSameAsPickUp ? undefined : editDropPointName.trim(),
       dropLatitude: editDropSameAsPickUp ? undefined : editDropLatitude,
       dropLongitude: editDropSameAsPickUp ? undefined : editDropLongitude,
+      // Empty list → studentId: null (unassign); one student → studentId + studentIds
       studentIds: editStudentIds,
+      studentId: editStudentIds.length === 1 ? editStudentIds[0] : editStudentIds.length === 0 ? null : undefined,
     })
     setEditSaving(false)
     if (!res.ok) {

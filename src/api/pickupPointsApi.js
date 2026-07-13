@@ -288,13 +288,25 @@ function pickupPointPayloadFields(body) {
     out.dropLongitude = parseCoordinate(body.dropLongitude ?? body.drop_longitude)
   }
 
-  const studentId = body.studentId != null ? Number(body.studentId) : NaN
-  if (Number.isFinite(studentId)) out.studentId = studentId
+  if (body.studentId === null) {
+    out.studentId = null
+  } else if (body.studentId != null && body.studentId !== '') {
+    const studentId = Number(body.studentId)
+    if (Number.isFinite(studentId)) out.studentId = studentId
+  }
 
-  const studentIds = Array.isArray(body.studentIds)
-    ? body.studentIds.map((sid) => Number(sid)).filter((sid) => Number.isFinite(sid))
-    : []
-  if (studentIds.length > 0) out.studentIds = studentIds
+  if (Array.isArray(body.studentIds)) {
+    const studentIds = body.studentIds
+      .map((sid) => Number(sid))
+      .filter((sid) => Number.isFinite(sid))
+    if (studentIds.length > 0) {
+      out.studentIds = studentIds
+      if (studentIds.length === 1 && out.studentId == null) out.studentId = studentIds[0]
+    } else {
+      // Empty selection = unassign student (PATCH with studentId: null)
+      out.studentId = null
+    }
+  }
 
   return out
 }
