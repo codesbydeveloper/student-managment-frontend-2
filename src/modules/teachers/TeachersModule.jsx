@@ -33,9 +33,8 @@ import { filterRowsByTableSearch } from '../../utils/tableQuery'
 import { formatActivityTimestamp } from '../../utils/lastActivityDisplay'
 import { email, minLength, phone10Digits, required, sanitizePhoneDigits } from '../../utils/validators'
 import { SearchableMultiSelect } from '../../components/SearchableMultiSelect'
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '../../utils/listPagination'
 
-const TEACHER_PAGE_LIMIT = 10
-const LOCAL_TEACHER_PAGE_SIZE = 10
 const TEACHER_SEARCH_KEYS = ['fullName', 'email', 'subject']
 
 /** Must match server CSV import — shown in UI and sample file (parseCsv → snake_case keys). */
@@ -128,8 +127,15 @@ export function TeachersModule() {
   const [teachersLoading, setTeachersLoading] = useState(false)
   const [teacherPage, setTeacherPage] = useState(1)
   const [teacherTotal, setTeacherTotal] = useState(0)
+  const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
+
+  const selectPageSize = useCallback((size) => {
+    if (!LIST_PAGE_SIZE_OPTIONS.includes(size)) return
+    setPageSize(size)
+    setTeacherPage(1)
+  }, [])
 
   const loadTeachersPage = useCallback(
     async (pageNum, searchQuery = '') => {
@@ -142,7 +148,7 @@ export function TeachersModule() {
       setTeachersLoading(true)
       const res = await fetchTeachersList(token, {
         page: pageNum,
-        limit: TEACHER_PAGE_LIMIT,
+        limit: pageSize,
         search: searchQuery,
       })
       setTeachersLoading(false)
@@ -155,7 +161,7 @@ export function TeachersModule() {
         setTeacherTotal(0)
       }
     },
-    [token],
+    [token, pageSize],
   )
 
   useEffect(() => {
@@ -199,10 +205,10 @@ export function TeachersModule() {
 
   const exportTotalPages = useMemo(() => {
     if (remoteTeachers !== undefined) {
-      return Math.max(1, Math.ceil((teacherTotal || 0) / TEACHER_PAGE_LIMIT))
+      return Math.max(1, Math.ceil((teacherTotal || 0) / pageSize))
     }
-    return Math.max(1, Math.ceil(teachersFilteredLocal.length / LOCAL_TEACHER_PAGE_SIZE))
-  }, [remoteTeachers, teacherTotal, teachersFilteredLocal.length])
+    return Math.max(1, Math.ceil(teachersFilteredLocal.length / pageSize))
+  }, [remoteTeachers, teacherTotal, teachersFilteredLocal.length, pageSize])
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -637,11 +643,10 @@ export function TeachersModule() {
     if (exportRange === 'pick') {
       const p = Math.min(Math.max(1, exportPickPage), exportTotalPages)
       if (remoteTeachers !== undefined && token) {
-        const res = await fetchTeachersList(token, { page: p, limit: TEACHER_PAGE_LIMIT })
+        const res = await fetchTeachersList(token, { page: p, limit: pageSize })
         if (!res.ok) throw new Error(res.error)
         return applyExportWhoFilter(filterTeachersForUser(user, res.teachers))
       }
-      const pageSize = LOCAL_TEACHER_PAGE_SIZE
       const start = (p - 1) * pageSize
       return applyExportWhoFilter(teachersFilteredLocal.slice(start, start + pageSize))
     }
@@ -660,7 +665,7 @@ export function TeachersModule() {
     try {
       const pick = Math.min(Math.max(1, exportPickPage), exportTotalPages)
       const isServerList = remoteTeachers !== undefined
-      const tableLimit = isServerList ? TEACHER_PAGE_LIMIT : LOCAL_TEACHER_PAGE_SIZE
+      const tableLimit = pageSize
 
       const rowsParam =
         exportRange === 'current' ? 'this_page' : exportRange === 'pick' ? 'one_page' : 'everyone'
@@ -1046,7 +1051,10 @@ export function TeachersModule() {
           rows={visibleTeachers}
           searchKeys={remoteTeachers !== undefined ? [] : TEACHER_SEARCH_KEYS}
           searchPlaceholder="Search teachers…"
-          pageSize={remoteTeachers !== undefined ? TEACHER_PAGE_LIMIT : LOCAL_TEACHER_PAGE_SIZE}
+          pageSize={pageSize}
+          pageSizeOptions={LIST_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={selectPageSize}
+          pageSizeSelectId="teachers-page-size"
           showSearch
           serverPagination={remoteTeachers !== undefined}
           serverTotal={teacherTotal}

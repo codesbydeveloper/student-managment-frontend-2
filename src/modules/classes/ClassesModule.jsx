@@ -26,9 +26,7 @@ import { ROLES } from '../../utils/constants'
 import { required } from '../../utils/validators'
 import { parseCsv } from '../../utils/csvParse'
 import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
-
-const CLASS_PAGE_LIMIT = 10
-const LOCAL_CLASS_PAGE_SIZE = 5
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '../../utils/listPagination'
 
 /** Must match POST /api/classes/import/csv column names. */
 const CLASS_IMPORT_CSV_HEADERS = ['name', 'gradeLevel', 'section', 'room', 'teacherEmail']
@@ -85,12 +83,19 @@ export function ClassesModule() {
   const [classesLoading, setClassesLoading] = useState(false)
   const [classPage, setClassPage] = useState(1)
   const [classTotal, setClassTotal] = useState(0)
+  const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
   /** Full list from GET /api/classes/assigned (teacher); paginated slices go into `remoteClasses`. */
   const teacherAssignedCacheRef = useRef(null)
   /** Cached filtered list while admin/principal search is active (avoids refetch on every page click). */
   const adminSearchCacheRef = useRef({ query: '', list: null })
+
+  const selectPageSize = useCallback((size) => {
+    if (!LIST_PAGE_SIZE_OPTIONS.includes(size)) return
+    setPageSize(size)
+    setClassPage(1)
+  }, [])
 
   function applyClassSearch(list, searchQuery) {
     const q = String(searchQuery ?? '').trim().toLowerCase()
@@ -125,8 +130,8 @@ export function ClassesModule() {
         const cached = teacherAssignedCacheRef.current
         if (cached) {
           const filtered = applyTeacherSearch(cached)
-          const start = (Math.max(1, pageNum) - 1) * CLASS_PAGE_LIMIT
-          setRemoteClasses(filtered.slice(start, start + CLASS_PAGE_LIMIT))
+          const start = (Math.max(1, pageNum) - 1) * pageSize
+          setRemoteClasses(filtered.slice(start, start + pageSize))
           setClassTotal(filtered.length)
           return
         }
@@ -137,8 +142,8 @@ export function ClassesModule() {
           const full = res.classes
           teacherAssignedCacheRef.current = full
           const filtered = applyTeacherSearch(full)
-          const start = (Math.max(1, pageNum) - 1) * CLASS_PAGE_LIMIT
-          setRemoteClasses(filtered.slice(start, start + CLASS_PAGE_LIMIT))
+          const start = (Math.max(1, pageNum) - 1) * pageSize
+          setRemoteClasses(filtered.slice(start, start + pageSize))
           setClassTotal(filtered.length)
         } else {
           toast.error(res.error)
@@ -168,8 +173,8 @@ export function ClassesModule() {
           filtered = applyClassSearch(res.classes, q)
           adminSearchCacheRef.current = { query: q, list: filtered }
         }
-        const start = (Math.max(1, pageNum) - 1) * CLASS_PAGE_LIMIT
-        setRemoteClasses(filtered.slice(start, start + CLASS_PAGE_LIMIT))
+        const start = (Math.max(1, pageNum) - 1) * pageSize
+        setRemoteClasses(filtered.slice(start, start + pageSize))
         setClassTotal(filtered.length)
         return
       }
@@ -178,7 +183,7 @@ export function ClassesModule() {
       setClassesLoading(true)
       const res = await fetchClassesList(token, {
         page: pageNum,
-        limit: CLASS_PAGE_LIMIT,
+        limit: pageSize,
       })
       setClassesLoading(false)
       if (res.ok) {
@@ -190,7 +195,7 @@ export function ClassesModule() {
         setClassTotal(0)
       }
     },
-    [token, useAssignedClassesApi],
+    [token, useAssignedClassesApi, pageSize],
   )
 
   useEffect(() => {
@@ -279,10 +284,10 @@ export function ClassesModule() {
 
   const exportTotalPages = useMemo(() => {
     if (remoteClasses !== undefined) {
-      return Math.max(1, Math.ceil((classTotal || 0) / CLASS_PAGE_LIMIT))
+      return Math.max(1, Math.ceil((classTotal || 0) / pageSize))
     }
-    return Math.max(1, Math.ceil(rows.length / LOCAL_CLASS_PAGE_SIZE))
-  }, [remoteClasses, classTotal, rows.length])
+    return Math.max(1, Math.ceil(rows.length / pageSize))
+  }, [remoteClasses, classTotal, rows.length, pageSize])
 
   useEffect(() => {
     setExportPickPage((prev) => Math.min(Math.max(1, prev), exportTotalPages))
@@ -329,14 +334,13 @@ export function ClassesModule() {
       if (remoteClasses !== undefined && token) {
         const assignedFull = teacherAssignedCacheRef.current
         if (assignedFull) {
-          const start = (p - 1) * CLASS_PAGE_LIMIT
-          return assignedFull.slice(start, start + CLASS_PAGE_LIMIT)
+          const start = (p - 1) * pageSize
+          return assignedFull.slice(start, start + pageSize)
         }
-        const res = await fetchClassesList(token, { page: p, limit: CLASS_PAGE_LIMIT })
+        const res = await fetchClassesList(token, { page: p, limit: pageSize })
         if (!res.ok) throw new Error(res.error)
         return res.classes
       }
-      const pageSize = LOCAL_CLASS_PAGE_SIZE
       const start = (p - 1) * pageSize
       return rows
         .slice(start, start + pageSize)
@@ -378,7 +382,7 @@ export function ClassesModule() {
         const apiRes = await exportClassesCsv(token, {
           rows: 'page',
           page: pageForApi,
-          limit: CLASS_PAGE_LIMIT,
+          limit: pageSize,
         })
         if (apiRes.ok && apiRes.blob) {
           downloadBlobFile(apiRes.blob, apiRes.filename)
@@ -804,7 +808,10 @@ export function ClassesModule() {
           rows={rows}
           searchKeys={remoteClasses !== undefined ? [] : ['name', 'gradeLevel', 'section', 'room']}
           searchPlaceholder="Search classes…"
-          pageSize={remoteClasses !== undefined ? CLASS_PAGE_LIMIT : LOCAL_CLASS_PAGE_SIZE}
+          pageSize={pageSize}
+          pageSizeOptions={LIST_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={selectPageSize}
+          pageSizeSelectId="classes-page-size"
           showSearch
           serverPagination={remoteClasses !== undefined}
           serverTotal={classTotal}

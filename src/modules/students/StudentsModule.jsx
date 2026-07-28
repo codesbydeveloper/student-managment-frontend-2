@@ -39,9 +39,7 @@ import { filterStudentsForUser } from '../../utils/roleFilters'
 import { required } from '../../utils/validators'
 import { parseCsv } from '../../utils/csvParse'
 import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
-
-const STUDENT_PAGE_LIMIT = 10
-const LOCAL_STUDENT_PAGE_SIZE = 5
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '../../utils/listPagination'
 
 const STUDENT_GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
@@ -288,10 +286,17 @@ export function StudentsModule() {
   const [studentsLoading, setStudentsLoading] = useState(false)
   const [studentPage, setStudentPage] = useState(1)
   const [studentTotal, setStudentTotal] = useState(0)
+  const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
   /** Full list from GET /api/parents/my-students (API is unpaginated; we slice per page in the UI). */
   const parentMyStudentsRef = useRef([])
+
+  const selectPageSize = useCallback((size) => {
+    if (!LIST_PAGE_SIZE_OPTIONS.includes(size)) return
+    setPageSize(size)
+    setStudentPage(1)
+  }, [])
 
   const loadStudentsPage = useCallback(
     async (pageNum, searchQuery = '') => {
@@ -332,8 +337,8 @@ export function StudentsModule() {
             all = res.students
           }
           const filtered = applyParentSearch(all)
-          const start = (pageNum - 1) * STUDENT_PAGE_LIMIT
-          setRemoteStudents(filtered.slice(start, start + STUDENT_PAGE_LIMIT))
+          const start = (pageNum - 1) * pageSize
+          setRemoteStudents(filtered.slice(start, start + pageSize))
           setStudentTotal(filtered.length)
           return
         }
@@ -344,12 +349,12 @@ export function StudentsModule() {
         const res = useAssigned
           ? await fetchStudentsAssigned(token, {
               page: pageNum,
-              limit: STUDENT_PAGE_LIMIT,
+              limit: pageSize,
               search: searchQuery,
             })
           : await fetchStudentsList(token, {
               page: pageNum,
-              limit: STUDENT_PAGE_LIMIT,
+              limit: pageSize,
               search: searchQuery,
             })
         if (res.ok) {
@@ -364,7 +369,7 @@ export function StudentsModule() {
         setStudentsLoading(false)
       }
     },
-    [token, user.role],
+    [token, user.role, pageSize],
   )
 
   useEffect(() => {
@@ -564,10 +569,10 @@ export function StudentsModule() {
 
   const exportTotalPages = useMemo(() => {
     if (remoteStudents !== undefined) {
-      return Math.max(1, Math.ceil((studentTotal || 0) / STUDENT_PAGE_LIMIT))
+      return Math.max(1, Math.ceil((studentTotal || 0) / pageSize))
     }
-    return Math.max(1, Math.ceil(visible.length / LOCAL_STUDENT_PAGE_SIZE))
-  }, [remoteStudents, studentTotal, visible.length])
+    return Math.max(1, Math.ceil(visible.length / pageSize))
+  }, [remoteStudents, studentTotal, visible.length, pageSize])
 
   useEffect(() => {
     setExportPickPage((prev) => Math.min(Math.max(1, prev), exportTotalPages))
@@ -778,13 +783,13 @@ export function StudentsModule() {
             all = pr.students
             parentMyStudentsRef.current = all
           }
-          const start = (p - 1) * STUDENT_PAGE_LIMIT
-          return applyExportStudentWho(all.slice(start, start + STUDENT_PAGE_LIMIT))
+          const start = (p - 1) * pageSize
+          return applyExportStudentWho(all.slice(start, start + pageSize))
         }
         const res =
           user.role === ROLES.TEACHER
-            ? await fetchStudentsAssigned(token, { page: p, limit: STUDENT_PAGE_LIMIT })
-            : await fetchStudentsList(token, { page: p, limit: STUDENT_PAGE_LIMIT })
+            ? await fetchStudentsAssigned(token, { page: p, limit: pageSize })
+            : await fetchStudentsList(token, { page: p, limit: pageSize })
         if (!res.ok) throw new Error(res.error)
         const rows =
           user.role === ROLES.TEACHER
@@ -792,7 +797,6 @@ export function StudentsModule() {
             : filterStudentsForUser(user, res.students, teachers, parents)
         return applyExportStudentWho(rows)
       }
-      const pageSize = LOCAL_STUDENT_PAGE_SIZE
       const start = (p - 1) * pageSize
       const mapped = visible
         .slice(start, start + pageSize)
@@ -924,7 +928,7 @@ export function StudentsModule() {
           exportBy: 'list',
           rows: exportRange === 'current' ? 'page' : 'one_page_by_number',
           page: exportRange === 'current' ? studentPage : pick,
-          limit: STUDENT_PAGE_LIMIT,
+          limit: pageSize,
           status: statusForExport,
         })
         if (stopped) return
@@ -1416,7 +1420,10 @@ export function StudentsModule() {
               : ['fullName', 'email', 'phone']
           }
           searchPlaceholder="Search students…"
-          pageSize={remoteStudents !== undefined ? STUDENT_PAGE_LIMIT : LOCAL_STUDENT_PAGE_SIZE}
+          pageSize={pageSize}
+          pageSizeOptions={LIST_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={selectPageSize}
+          pageSizeSelectId="students-page-size"
           showSearch
           serverPagination={remoteStudents !== undefined}
           serverTotal={studentTotal}

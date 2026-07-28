@@ -1,3 +1,7 @@
+/** Shared list table page sizes (students, teachers, parents, classes). */
+export const LIST_PAGE_SIZE_OPTIONS = [25, 50, 100]
+export const DEFAULT_LIST_PAGE_SIZE = 25
+
 /**
  * @param {number} current
  * @param {number} totalPages

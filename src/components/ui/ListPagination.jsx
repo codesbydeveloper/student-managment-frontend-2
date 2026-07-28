@@ -1,4 +1,5 @@
 import { Button } from './Button'
+import { Select } from './Select'
 
 /**
  * Standard table/list footer: Previous · current/total (indigo) · Next.
@@ -9,6 +10,9 @@ import { Button } from './Button'
  *   totalPages?: number,
  *   total?: number,
  *   pageSize?: number,
+ *   pageSizeOptions?: number[],
+ *   onPageSizeChange?: (size: number) => void,
+ *   pageSizeSelectId?: string,
  *   hasNext?: boolean,
  *   loading?: boolean,
  *   onPrev: () => void,
@@ -25,6 +29,9 @@ export function ListPagination({
   totalPages: totalPagesProp,
   total,
   pageSize = 10,
+  pageSizeOptions,
+  onPageSizeChange,
+  pageSizeSelectId = 'list-page-size',
   hasNext,
   loading = false,
   onPrev,
@@ -47,6 +54,10 @@ export function ListPagination({
   const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * lim + 1
   const rangeEnd = totalCount === 0 ? 0 : Math.min(safePage * lim, totalCount)
   const shouldShowRange = showRange ?? typeof total === 'number'
+  const showPageSize =
+    Array.isArray(pageSizeOptions) &&
+    pageSizeOptions.length > 0 &&
+    typeof onPageSizeChange === 'function'
 
   return (
     <div
@@ -72,6 +83,26 @@ export function ListPagination({
               emptyLabel
             )}
           </span>
+        ) : null}
+        {showPageSize ? (
+          <div className="flex items-center gap-2">
+            <label htmlFor={pageSizeSelectId} className="text-xs font-semibold text-slate-500">
+              Per page
+            </label>
+            <Select
+              id={pageSizeSelectId}
+              value={String(lim)}
+              disabled={loading}
+              className="w-auto min-w-[4.5rem] py-1.5 text-xs"
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            >
+              {pageSizeOptions.map((n) => (
+                <option key={n} value={String(n)}>
+                  {n}
+                </option>
+              ))}
+            </Select>
+          </div>
         ) : null}
         {leftExtra}
       </div>

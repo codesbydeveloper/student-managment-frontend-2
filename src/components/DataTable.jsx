@@ -15,6 +15,10 @@ export function DataTable({
   searchKeys,
   searchPlaceholder = 'Search…',
   pageSize = 5,
+  /** When set with `onPageSizeChange`, shows a per-page selector in the footer. */
+  pageSizeOptions,
+  onPageSizeChange,
+  pageSizeSelectId,
   emptyMessage = 'No records found.',
   toolbar,
   /** When true, `rows` is one server page; use `serverTotal` + `serverPage` + `onServerPageChange` for paging. */
@@ -144,6 +148,16 @@ export function DataTable({
           totalPages={totalPages}
           total={serverPagination ? serverTotal : filtered.length}
           pageSize={pageSize}
+          pageSizeOptions={pageSizeOptions}
+          onPageSizeChange={
+            typeof onPageSizeChange === 'function'
+              ? (size) => {
+                  onPageSizeChange(size)
+                  if (!serverPagination) setPage(1)
+                }
+              : undefined
+          }
+          pageSizeSelectId={pageSizeSelectId}
           onPrev={() => {
             if (serverPagination) {
               onServerPageChange?.(Math.max(1, currentPage - 1))

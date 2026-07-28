@@ -26,8 +26,8 @@ export const LOGIN_ROLE_OPTIONS = [
   ROLES.DRIVER,
   ROLES.PRINCIPAL,
 ]
-  export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://miraya.dharshschoolofexcellence.co.in').replace(/\/$/, '')
- // export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+ // export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://darkgreen-chamois-549964.hostingersite.com').replace(/\/$/, '')
+  export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 export const STORAGE_KEYS = {
   TOKEN: 'token',
@@ -41,7 +41,7 @@ export const STORAGE_KEYS = {
   PWA_INSTALL_DISMISSED_DATE: 'pwa_install_dismissed_date',
   /** @deprecated Legacy session dismiss key */
   PWA_INSTALL_SESSION_DISMISSED: 'pwa_install_session_dismissed',
-  
+
   PUSH_PERMISSION_ASKED: 'scs_push_permission_asked',
 
   PUSH_PERMISSION_DISMISSED_DATE: 'scs_push_permission_dismissed_date',

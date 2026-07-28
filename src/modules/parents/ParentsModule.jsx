@@ -30,9 +30,7 @@ import { SearchableMultiSelect } from '../../components/SearchableMultiSelect'
 import { parseCsv } from '../../utils/csvParse'
 import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
 import { formatActivityTimestamp } from '../../utils/lastActivityDisplay'
-
-const PARENT_PAGE_LIMIT = 10
-const LOCAL_PARENT_PAGE_SIZE = 5
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '../../utils/listPagination'
 
 /** Must match POST /api/parents/import/csv column names. */
 const PARENT_IMPORT_CSV_HEADERS = [
@@ -188,8 +186,15 @@ export function ParentsModule() {
   const [parentsLoading, setParentsLoading] = useState(false)
   const [parentPage, setParentPage] = useState(1)
   const [parentTotal, setParentTotal] = useState(0)
+  const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
+
+  const selectPageSize = useCallback((size) => {
+    if (!LIST_PAGE_SIZE_OPTIONS.includes(size)) return
+    setPageSize(size)
+    setParentPage(1)
+  }, [])
 
   const loadParentsPage = useCallback(
     async (pageNum, searchQuery = '') => {
@@ -202,7 +207,7 @@ export function ParentsModule() {
       setParentsLoading(true)
       const res = await fetchParentsList(token, {
         page: pageNum,
-        limit: PARENT_PAGE_LIMIT,
+        limit: pageSize,
         search: searchQuery,
       })
       setParentsLoading(false)
@@ -215,7 +220,7 @@ export function ParentsModule() {
         setParentTotal(0)
       }
     },
-    [token],
+    [token, pageSize],
   )
 
   useEffect(() => {
@@ -388,10 +393,10 @@ export function ParentsModule() {
 
   const exportTotalPages = useMemo(() => {
     if (remoteParents !== undefined) {
-      return Math.max(1, Math.ceil((parentTotal || 0) / PARENT_PAGE_LIMIT))
+      return Math.max(1, Math.ceil((parentTotal || 0) / pageSize))
     }
-    return Math.max(1, Math.ceil(baseParents.length / LOCAL_PARENT_PAGE_SIZE))
-  }, [remoteParents, parentTotal, baseParents.length])
+    return Math.max(1, Math.ceil(baseParents.length / pageSize))
+  }, [remoteParents, parentTotal, baseParents.length, pageSize])
 
   useEffect(() => {
     setExportPickPage((prev) => Math.min(Math.max(1, prev), exportTotalPages))
@@ -445,11 +450,10 @@ export function ParentsModule() {
     if (exportRange === 'pick') {
       const p = Math.min(Math.max(1, exportPickPage), exportTotalPages)
       if (remoteParents !== undefined && token) {
-        const res = await fetchParentsList(token, { page: p, limit: PARENT_PAGE_LIMIT })
+        const res = await fetchParentsList(token, { page: p, limit: pageSize })
         if (!res.ok) throw new Error(res.error)
         return applyExportParentWho(res.parents)
       }
-      const pageSize = LOCAL_PARENT_PAGE_SIZE
       const start = (p - 1) * pageSize
       return applyExportParentWho(baseParents.slice(start, start + pageSize))
     }
@@ -491,7 +495,7 @@ export function ParentsModule() {
         const apiRes = await exportParentsCsv(token, {
           rows: 'page',
           page: exportRange === 'current' ? parentPage : pick,
-          limit: PARENT_PAGE_LIMIT,
+          limit: pageSize,
           status: statusForPage,
         })
         if (apiRes.ok && apiRes.blob) {
@@ -1057,7 +1061,10 @@ export function ParentsModule() {
           rows={rows}
           searchKeys={remoteParents !== undefined ? [] : ['fullName', 'email', 'phone']}
           searchPlaceholder="Search parents…"
-          pageSize={remoteParents !== undefined ? PARENT_PAGE_LIMIT : LOCAL_PARENT_PAGE_SIZE}
+          pageSize={pageSize}
+          pageSizeOptions={LIST_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={selectPageSize}
+          pageSizeSelectId="parents-page-size"
           showSearch
           serverPagination={remoteParents !== undefined}
           serverTotal={parentTotal}
