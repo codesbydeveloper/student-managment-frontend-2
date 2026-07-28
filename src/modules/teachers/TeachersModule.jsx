@@ -29,6 +29,7 @@ import { filterTeachersForUser } from '../../utils/roleFilters'
 import { parseCsv } from '../../utils/csvParse'
 import { AssignedClassPill } from '../../components/ui/AssignedClassPill'
 import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
+import { GradeSectionFilters } from '../../components/GradeSectionFilters'
 import { filterRowsByTableSearch } from '../../utils/tableQuery'
 import { formatActivityTimestamp } from '../../utils/lastActivityDisplay'
 import { email, minLength, phone10Digits, required, sanitizePhoneDigits } from '../../utils/validators'
@@ -44,7 +45,8 @@ const TEACHER_IMPORT_CSV_HEADERS = [
   'Password',
   'phone',
   'subject',
-  'room',
+  'grade',
+  'section',
   'active',
 ]
 
@@ -65,28 +67,41 @@ function parseCsvActive(value) {
   return true
 }
 
-/** One cell may be `201` or legacy `5 (201)` — we keep the room number only. */
-function parseRoomNumbersFromCsv(raw) {
+/** Split a CSV cell into list values (`10,11` or `A,B`). */
+function splitCsvList(raw) {
   if (!raw) return []
   return String(raw)
-    .split(/[;,]/)
-    .map((part) => {
-      const t = String(part).trim()
-      const inParens = t.match(/\(([^)]+)\)\s*$/)
-      if (inParens) return inParens[1].trim()
-      return t
-    })
+    .split(',')
+    .map((part) => String(part).trim())
     .filter(Boolean)
 }
 
-/** Match classes by `room` field (not class id). */
-function resolveClassIdsFromRoomNumbers(roomNumbers, classes) {
+/** Match classes by grade + section (supports multi via `;`). */
+function resolveClassIdsFromGradeSections(gradesRaw, sectionsRaw, classes) {
+  const grades = splitCsvList(gradesRaw)
+  const sections = splitCsvList(sectionsRaw)
+  if (!grades.length || !sections.length) return []
+
+  const pairs = []
+  if (grades.length === sections.length) {
+    for (let i = 0; i < grades.length; i++) pairs.push([grades[i], sections[i]])
+  } else if (grades.length === 1) {
+    for (const s of sections) pairs.push([grades[0], s])
+  } else if (sections.length === 1) {
+    for (const g of grades) pairs.push([g, sections[0]])
+  } else {
+    const n = Math.min(grades.length, sections.length)
+    for (let i = 0; i < n; i++) pairs.push([grades[i], sections[i]])
+  }
+
   const ids = []
   const seen = new Set()
-  for (const room of roomNumbers) {
-    const r = String(room).trim()
-    if (!r) continue
-    const match = classes.find((c) => String(c.room ?? '').trim() === r)
+  for (const [grade, section] of pairs) {
+    const match = classes.find(
+      (c) =>
+        String(c.gradeLevel ?? '').trim() === grade &&
+        String(c.section ?? '').trim().toUpperCase() === section.toUpperCase(),
+    )
     if (!match) continue
     const sid = String(match.id)
     if (seen.has(sid)) continue
@@ -103,19 +118,11 @@ function csvRowToTeacherDraft(row) {
   const phone = sanitizePhoneDigits(pickCsvField(row, ['phone', 'number', 'mobile']))
   const subject = pickCsvField(row, ['subject', 'subject_focus', 'subjectfocus'])
   const active = parseCsvActive(pickCsvField(row, ['active', 'is_active', 'isactive']))
-  const roomsRaw =
-    pickCsvField(row, [
-      'room',
-      'rooms',
-      'class_room',
-      'class_rooms',
-      'assigned_classes',
-      'assignedclasses',
-      'class_ids',
-      'classes',
-    ]) || ''
-  const roomNumbers = parseRoomNumbersFromCsv(roomsRaw)
-  return { fullName, email: emailVal, phone, password, subject, active, roomNumbers }
+  const grade =
+    pickCsvField(row, ['grade', 'grades', 'gradelevel', 'grade_level', 'class_grade']) || ''
+  const section =
+    pickCsvField(row, ['section', 'sections', 'class_section']) || ''
+  return { fullName, email: emailVal, phone, password, subject, active, grade, section }
 }
 
 export function TeachersModule() {
@@ -130,6 +137,8 @@ export function TeachersModule() {
   const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
+  const [filterGrade, setFilterGrade] = useState('')
+  const [filterSection, setFilterSection] = useState('')
 
   const selectPageSize = useCallback((size) => {
     if (!LIST_PAGE_SIZE_OPTIONS.includes(size)) return
@@ -150,6 +159,8 @@ export function TeachersModule() {
         page: pageNum,
         limit: pageSize,
         search: searchQuery,
+        grade: filterGrade,
+        section: filterSection,
       })
       setTeachersLoading(false)
       if (res.ok) {
@@ -161,7 +172,7 @@ export function TeachersModule() {
         setTeacherTotal(0)
       }
     },
-    [token, pageSize],
+    [token, pageSize, filterGrade, filterSection],
   )
 
   useEffect(() => {
@@ -590,6 +601,24 @@ export function TeachersModule() {
     }
   }
 
+  const gradeForClassId = useCallback(
+    (classId) => {
+      const sid = String(classId ?? '').trim()
+      const c = classes.find((x) => String(x.id) === sid)
+      return c ? String(c.gradeLevel ?? '').trim() : ''
+    },
+    [classes],
+  )
+
+  const sectionForClassId = useCallback(
+    (classId) => {
+      const sid = String(classId ?? '').trim()
+      const c = classes.find((x) => String(x.id) === sid)
+      return c ? String(c.section ?? '').trim() : ''
+    },
+    [classes],
+  )
+
   const downloadTeachersCsv = (rows, filename) => {
     const header = [...TEACHER_IMPORT_CSV_HEADERS]
     const lines = rows.map((t) =>
@@ -600,9 +629,13 @@ export function TeachersModule() {
         t.phone,
         t.subject,
         t.classIds
-          .map((id) => roomNumberForClassId(id))
+          .map((id) => gradeForClassId(id))
           .filter(Boolean)
-          .join(';'),
+          .join(','),
+        t.classIds
+          .map((id) => sectionForClassId(id))
+          .filter(Boolean)
+          .join(','),
         t.active ? 'true' : 'false',
       ]
         .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
@@ -805,7 +838,7 @@ export function TeachersModule() {
           continue
         }
         batchEmails.add(em)
-        const classIds = resolveClassIdsFromRoomNumbers(d.roomNumbers, classes)
+        const classIds = resolveClassIdsFromGradeSections(d.grade, d.section, classes)
         drafts.push({ ...d, classIds })
       }
 
@@ -1056,6 +1089,21 @@ export function TeachersModule() {
           onPageSizeChange={selectPageSize}
           pageSizeSelectId="teachers-page-size"
           showSearch
+          toolbar={
+            <GradeSectionFilters
+              idPrefix="teachers-filter"
+              grade={filterGrade}
+              section={filterSection}
+              onGradeChange={(v) => {
+                setFilterGrade(v)
+                setTeacherPage(1)
+              }}
+              onSectionChange={(v) => {
+                setFilterSection(v)
+                setTeacherPage(1)
+              }}
+            />
+          }
           serverPagination={remoteTeachers !== undefined}
           serverTotal={teacherTotal}
           serverPage={teacherPage}
@@ -1114,10 +1162,11 @@ export function TeachersModule() {
               'secret456',
               '9876501234',
               'Science',
-              '15;16',
+              '10,11',
+              'A,B',
               'yes',
             ]}
-            footnote=" one room → 101 · more rooms → 101;102 (semicolon between numbers). active: true or yes."
+            footnote=" one class → grade 10 + section A · more classes → grade 10,11 + section A,B (comma between values; put quotes around the cell in CSV). active: true or yes."
             sampleHref="/teachers-import-sample.csv"
           />
 

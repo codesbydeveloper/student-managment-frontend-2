@@ -158,30 +158,32 @@ export function useDriverTripState(user, token) {
     return null
   }, [gpsTripActive, livePosition, idleMapPosition])
 
-  const onStart = useCallback(() => {
+  const onStart = useCallback((opts = {}) => {
     if (plateContractIssue) {
       toast.error(
         plateContractIssue === 'api-demo-plate'
           ? 'Your school returned a demo vehicle id (e.g. bus-1) instead of the real registration plate. Parents join live rooms using the exact plate in buses.plate — update driver_profiles.assigned_bus / my-route to that plate.'
           : 'No vehicle from GET /api/drivers/my-route while this browser is still on a demo bus id. Parents and the server match live GPS using the exact plate in buses.plate — fix the driver assignment first, then refresh.',
       )
-      return
+      return { ok: false }
     }
     const res = startLiveTrip(liveBusId, driverId)
     if (!res.ok) {
       toast.error(res.error)
-      return
+      return { ok: false }
     }
-    toast.success('Trip started.')
+    if (!opts.silent) toast.success('Trip started.')
+    return { ok: true }
   }, [liveBusId, driverId, plateContractIssue])
 
-  const onStop = useCallback(() => {
+  const onStop = useCallback((opts = {}) => {
     const res = stopTrip(trackingBusId, driverId)
     if (!res.ok) {
       toast.error(res.error)
-      return
+      return { ok: false }
     }
-    toast.success('Trip ended.')
+    if (!opts.silent) toast.success('Trip ended.')
+    return { ok: true }
   }, [trackingBusId, driverId])
 
   return {

@@ -75,9 +75,9 @@ export function DataTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         {showSearch ? (
-          <div className="w-full max-w-xs">
+          <div className="w-full max-w-xs shrink-0">
             <Input
               value={query}
               onChange={(e) =>
@@ -89,10 +89,8 @@ export function DataTable({
               aria-label="Search table"
             />
           </div>
-        ) : (
-          <div />
-        )}
-        {toolbar ? <div className="flex flex-wrap gap-2">{toolbar}</div> : null}
+        ) : null}
+        {toolbar ? <div className="flex flex-wrap items-center gap-2">{toolbar}</div> : null}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-lg shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02]">

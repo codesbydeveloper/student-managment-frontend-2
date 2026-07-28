@@ -630,3 +630,95 @@ export async function deletePickupPoint(token, id) {
     return { ok: false, error: msg }
   }
 }
+
+/**
+ * POST /api/transport/pickup-points/import/csv — multipart field `file`.
+ */
+export async function importPickupPointsCsv(token, file) {
+  if (!token) {
+    return { ok: false, error: 'Not signed in' }
+  }
+  const form = new FormData()
+  form.append('file', file, file.name)
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/transport/pickup-points/import/csv`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      body: form,
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: formatListError(data, res.status),
+      }
+    }
+    return { ok: true, data: data && typeof data === 'object' ? data : null }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg }
+  }
+}
+
+/**
+ * GET /api/transport/pickup-points/export/csv
+ */
+export async function exportPickupPointsCsv(token) {
+  if (!token) {
+    return { ok: false, error: 'Not signed in', useClient: true }
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/transport/pickup-points/export/csv`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'text/csv,*/*',
+      },
+    })
+    const ctype = (res.headers.get('Content-Type') || '').toLowerCase()
+    if (!res.ok) {
+      const useClient = [404, 405, 501].includes(res.status)
+      const data = ctype.includes('application/json')
+        ? await res.json().catch(() => null)
+        : null
+      return {
+        ok: false,
+        error: formatListError(data, res.status),
+        useClient,
+      }
+    }
+    if (ctype.includes('application/json')) {
+      const data = await res.json().catch(() => null)
+      return {
+        ok: false,
+        error: formatListError(data, res.status) || 'Unexpected response',
+        useClient: true,
+      }
+    }
+    const blob = await res.blob()
+    let filename = 'pickup-points-export.csv'
+    const cd = res.headers.get('Content-Disposition')
+    if (cd) {
+      const star = cd.match(/filename\*=UTF-8''([^;\s]+)/i)
+      const quoted = cd.match(/filename="([^"]+)"/i) || cd.match(/filename=([^;\s]+)/i)
+      if (star) {
+        try {
+          filename = decodeURIComponent(star[1])
+        } catch {
+          filename = star[1]
+        }
+      } else if (quoted) {
+        filename = quoted[1].replace(/["']/g, '')
+      }
+    }
+    return { ok: true, blob, filename }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg, useClient: true }
+  }
+}

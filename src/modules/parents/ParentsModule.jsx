@@ -29,6 +29,7 @@ import { email, minLength, phone10Digits, required, sanitizePhoneDigits } from '
 import { SearchableMultiSelect } from '../../components/SearchableMultiSelect'
 import { parseCsv } from '../../utils/csvParse'
 import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
+import { GradeSectionFilters } from '../../components/GradeSectionFilters'
 import { formatActivityTimestamp } from '../../utils/lastActivityDisplay'
 import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '../../utils/listPagination'
 
@@ -189,6 +190,8 @@ export function ParentsModule() {
   const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
+  const [filterGrade, setFilterGrade] = useState('')
+  const [filterSection, setFilterSection] = useState('')
 
   const selectPageSize = useCallback((size) => {
     if (!LIST_PAGE_SIZE_OPTIONS.includes(size)) return
@@ -209,6 +212,8 @@ export function ParentsModule() {
         page: pageNum,
         limit: pageSize,
         search: searchQuery,
+        grade: filterGrade,
+        section: filterSection,
       })
       setParentsLoading(false)
       if (res.ok) {
@@ -220,7 +225,7 @@ export function ParentsModule() {
         setParentTotal(0)
       }
     },
-    [token, pageSize],
+    [token, pageSize, filterGrade, filterSection],
   )
 
   useEffect(() => {
@@ -1066,6 +1071,21 @@ export function ParentsModule() {
           onPageSizeChange={selectPageSize}
           pageSizeSelectId="parents-page-size"
           showSearch
+          toolbar={
+            <GradeSectionFilters
+              idPrefix="parents-filter"
+              grade={filterGrade}
+              section={filterSection}
+              onGradeChange={(v) => {
+                setFilterGrade(v)
+                setParentPage(1)
+              }}
+              onSectionChange={(v) => {
+                setFilterSection(v)
+                setParentPage(1)
+              }}
+            />
+          }
           serverPagination={remoteParents !== undefined}
           serverTotal={parentTotal}
           serverPage={parentPage}

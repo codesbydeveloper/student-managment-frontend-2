@@ -1,0 +1,3 @@
+location,latitude,longitude,pickupTime,dropTime,dropOffSameAsPickup,dropLocation,dropLatitude,dropLongitude
+Main Gate,28.6139,77.2090,07:30,14:00,true,,,
+North Stop,28.6200,77.2100,07:45,14:15,false,South Gate,28.6150,77.2050

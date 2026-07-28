@@ -317,6 +317,99 @@ export async function fetchClassesSummary(token) {
   }
 }
 
+/** Normalize GET /api/classes/grades or /sections payloads into sorted unique string values. */
+function extractGradeOrSectionValues(data, keys) {
+  let list = []
+  if (Array.isArray(data)) list = data
+  else if (data && typeof data === 'object') {
+    for (const key of keys) {
+      if (Array.isArray(data[key])) {
+        list = data[key]
+        break
+      }
+    }
+    if (!list.length && Array.isArray(data.data)) list = data.data
+  }
+  const out = []
+  const seen = new Set()
+  for (const item of list) {
+    let v = ''
+    if (item == null) continue
+    if (typeof item === 'string' || typeof item === 'number') v = String(item).trim()
+    else if (typeof item === 'object') {
+      v = String(
+        item.gradeLevel ?? item.grade ?? item.section ?? item.name ?? item.value ?? item.label ?? '',
+      ).trim()
+    }
+    if (!v || seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+  }
+  return out.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+}
+
+/**
+ * GET /api/classes/grades — Bearer + Accept; grade options for list filters.
+ * @returns {Promise<{ ok: true, grades: string[] } | { ok: false, error: string, grades: [] }>}
+ */
+export async function fetchClassGrades(token) {
+  if (!token) {
+    return { ok: false, error: 'Not signed in', grades: [] }
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/classes/grades`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: formatListError(data, res.status), grades: [] }
+    }
+    return {
+      ok: true,
+      grades: extractGradeOrSectionValues(data, ['grades', 'gradeLevels', 'grade_levels']),
+    }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg, grades: [] }
+  }
+}
+
+/**
+ * GET /api/classes/sections — Bearer + Accept; section options for list filters.
+ * @returns {Promise<{ ok: true, sections: string[] } | { ok: false, error: string, sections: [] }>}
+ */
+export async function fetchClassSections(token) {
+  if (!token) {
+    return { ok: false, error: 'Not signed in', sections: [] }
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/classes/sections`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return { ok: false, error: formatListError(data, res.status), sections: [] }
+    }
+    return {
+      ok: true,
+      sections: extractGradeOrSectionValues(data, ['sections']),
+    }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return { ok: false, error: msg, sections: [] }
+  }
+}
+
 /**
  * GET /api/classes/assigned — Bearer; classes assigned to the signed-in teacher.
  * Same response normalization as {@link fetchClassesSummary}.

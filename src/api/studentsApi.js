@@ -69,12 +69,16 @@ export async function fetchStudentsList(token, params = {}) {
   const page = Math.max(1, Number(params.page) || 1)
   const limit = Math.max(1, Math.min(100, Number(params.limit) || 10))
   const search = String(params.search ?? '').trim()
+  const grade = String(params.grade ?? '').trim()
+  const section = String(params.section ?? '').trim()
   if (!token) {
     return { ok: false, error: 'Not signed in', students: [], total: 0, page: 1, limit }
   }
   try {
     const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (search) qs.set('search', search)
+    if (grade) qs.set('grade', grade)
+    if (section) qs.set('section', section)
     const res = await fetch(`${API_BASE_URL}/api/students?${qs}`, {
       method: 'GET',
       headers: {
@@ -110,12 +114,16 @@ export async function fetchStudentsAssigned(token, params = {}) {
   const page = Math.max(1, Number(params.page) || 1)
   const limit = Math.max(1, Math.min(100, Number(params.limit) || 10))
   const search = String(params.search ?? '').trim()
+  const grade = String(params.grade ?? '').trim()
+  const section = String(params.section ?? '').trim()
   if (!token) {
     return { ok: false, error: 'Not signed in', students: [], total: 0, page: 1, limit }
   }
   try {
     const qs = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (search) qs.set('search', search)
+    if (grade) qs.set('grade', grade)
+    if (section) qs.set('section', section)
     const res = await fetch(`${API_BASE_URL}/api/students/assigned?${qs}`, {
       method: 'GET',
       headers: {

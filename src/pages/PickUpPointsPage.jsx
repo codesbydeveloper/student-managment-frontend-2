@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
 import { useAuth } from '../context/AuthContext'
 import { useConfirm } from '../context/ConfirmContext'
@@ -6,8 +6,10 @@ import { fetchStudentsBusOverview } from '../api/studentsApi'
 import {
   createPickupPoint,
   deletePickupPoint,
+  exportPickupPointsCsv,
   fetchPickupPointById,
   fetchPickupPointsList,
+  importPickupPointsCsv,
   updatePickupPoint,
 } from '../api/pickupPointsApi'
 import { TransportStopLocationSection } from '../components/transport/TransportStopLocationSection'
@@ -18,9 +20,30 @@ import { syncPageFromApi } from '../utils/pagination'
 import { ApprovalListPagination } from '../components/notifications/ApprovalListPagination'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
+import { CsvImportGuideTable } from '../components/ui/CsvImportGuideTable'
 import { Modal } from '../components/Modal'
 
 const PAGE_LIMIT = 10
+
+/** Must match future POST /api/transport/pickup-points/import/csv column names. */
+const PICKUP_IMPORT_CSV_HEADERS = [
+  'location',
+  'latitude',
+  'longitude',
+  'pickupTime',
+  'dropTime',
+  'dropOffSameAsPickup',
+  'dropLocation',
+  'dropLatitude',
+  'dropLongitude',
+]
+const PICKUP_IMPORT_CSV_REQUIRED = [
+  'location',
+  'latitude',
+  'longitude',
+  'pickupTime',
+  'dropTime',
+]
 
 function coordsValid(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng)
@@ -99,6 +122,16 @@ export default function PickUpPointsPage() {
   const [editLoading, setEditLoading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+
+  const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [exportRange, setExportRange] = useState('current')
+  const [exportLoading, setExportLoading] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importingCsv, setImportingCsv] = useState(false)
+  const [importFileLabel, setImportFileLabel] = useState('')
+  const [pendingImportFile, setPendingImportFile] = useState(null)
+  const [csvInputKey, setCsvInputKey] = useState(0)
+  const csvImportInputRef = useRef(null)
 
   useEffect(() => {
     if (!dropSameAsPickUp) return
@@ -475,6 +508,155 @@ export default function PickUpPointsPage() {
     else await loadList()
   }
 
+  const exportTotalPages = useMemo(
+    () => Math.max(1, Math.ceil((total || 0) / PAGE_LIMIT)),
+    [total],
+  )
+
+  const downloadBlobFile = (blob, filename) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const downloadPickupPointsCsv = (list, filename) => {
+    const lines = list.map((p) =>
+      [
+        p.name || p.location || '',
+        p.latitude ?? '',
+        p.longitude ?? '',
+        p.pickupTime || '',
+        p.dropTime || '',
+        p.dropOffSameAsPickup !== false ? 'true' : 'false',
+        p.dropOffSameAsPickup !== false ? '' : p.dropLocation || '',
+        p.dropOffSameAsPickup !== false ? '' : (p.dropLatitude ?? ''),
+        p.dropOffSameAsPickup !== false ? '' : (p.dropLongitude ?? ''),
+      ]
+        .map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`)
+        .join(','),
+    )
+    const csv = [PICKUP_IMPORT_CSV_HEADERS.join(','), ...lines].join('\n')
+    downloadBlobFile(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename)
+  }
+
+  const fetchAllPickupPoints = async () => {
+    const all = []
+    let p = 1
+    let pages = 1
+    while (p <= pages) {
+      const res = await fetchPickupPointsList(token, { page: p, limit: PAGE_LIMIT })
+      if (!res.ok) throw new Error(res.error || 'Could not load pick up points.')
+      all.push(...res.points)
+      pages = Math.max(1, Math.ceil((res.total || 0) / PAGE_LIMIT))
+      if (!res.points.length) break
+      p += 1
+    }
+    return all
+  }
+
+  const runExportCsv = async () => {
+    if (!token) {
+      toast.error('Sign in to export pick up points.')
+      return
+    }
+    setExportLoading(true)
+    try {
+      if (exportRange === 'current') {
+        if (!points.length) {
+          toast.info('Nothing to export on this page.')
+          return
+        }
+        downloadPickupPointsCsv(points, `pickup-points-export-page-${page}.csv`)
+        toast.success('Export ready — your file should appear in Downloads.', { autoClose: 5000 })
+        setExportModalOpen(false)
+        return
+      }
+
+      const apiRes = await exportPickupPointsCsv(token)
+      if (apiRes.ok && apiRes.blob) {
+        downloadBlobFile(apiRes.blob, apiRes.filename || 'pickup-points-export.csv')
+        toast.success('Export ready — your file should appear in Downloads.', { autoClose: 5000 })
+        setExportModalOpen(false)
+        return
+      }
+      if (!apiRes.useClient) {
+        toast.error(apiRes.error)
+        return
+      }
+      toast.info('Building the file on this device…')
+      const list = await fetchAllPickupPoints()
+      if (!list.length) {
+        toast.info('Nothing to export.')
+        return
+      }
+      downloadPickupPointsCsv(list, 'pickup-points-export.csv')
+      toast.success('Export ready — your file should appear in Downloads.', { autoClose: 5000 })
+      setExportModalOpen(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const openImportCsvModal = () => {
+    setPendingImportFile(null)
+    setImportFileLabel('')
+    setCsvInputKey((k) => k + 1)
+    setImportModalOpen(true)
+  }
+
+  const closeImportCsvModal = () => {
+    if (importingCsv) return
+    setImportModalOpen(false)
+    setImportFileLabel('')
+    setPendingImportFile(null)
+    setCsvInputKey((k) => k + 1)
+  }
+
+  const onCsvFilePicked = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPendingImportFile(file)
+    setImportFileLabel(file.name)
+  }
+
+  const confirmImportPickupPoints = async () => {
+    if (!pendingImportFile || importingCsv) return
+    if (!token) {
+      toast.error('Sign in to import pick up points.')
+      return
+    }
+    setImportingCsv(true)
+    try {
+      const apiRes = await importPickupPointsCsv(token, pendingImportFile)
+      if (apiRes.ok) {
+        const d = apiRes.data
+        const detail =
+          typeof d?.message === 'string' && d.message
+            ? d.message
+            : typeof d?.imported === 'number'
+              ? `Imported ${d.imported} pick up point(s).`
+              : 'Pick up points imported from file.'
+        toast.success(detail)
+        setImportModalOpen(false)
+        setImportFileLabel('')
+        setPendingImportFile(null)
+        setCsvInputKey((k) => k + 1)
+        setPage(1)
+        await loadList()
+        return
+      }
+      toast.error(apiRes.error)
+    } finally {
+      setImportingCsv(false)
+    }
+  }
+
   const renderLocationForm = ({
     idPrefix,
     sameAsPickUp,
@@ -703,15 +885,38 @@ export default function PickUpPointsPage() {
           title="All pick up points"
           subtitle={total > 0 ? `${total} total` : 'No pick up points yet.'}
           action={
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={listLoading || !token}
-              onClick={() => void loadList()}
-            >
-              {listLoading ? 'Refreshing…' : 'Refresh'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!token || importingCsv}
+                onClick={openImportCsvModal}
+              >
+                Import CSV
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!token || exportLoading}
+                onClick={() => {
+                  setExportRange('current')
+                  setExportModalOpen(true)
+                }}
+              >
+                Export CSV
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={listLoading || !token}
+                onClick={() => void loadList()}
+              >
+                {listLoading ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </div>
           }
         />
         <div className="border-t border-slate-100 px-4 py-4 sm:px-6">
@@ -859,6 +1064,156 @@ export default function PickUpPointsPage() {
             })}
           </form>
         )}
+      </Modal>
+
+      <Modal
+        open={importModalOpen}
+        onClose={closeImportCsvModal}
+        title="Import pick up points (CSV)"
+        size="md"
+        footer={
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-w-[6.5rem]"
+              disabled={importingCsv}
+              onClick={closeImportCsvModal}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              className="min-w-[8.5rem]"
+              disabled={!pendingImportFile || importingCsv}
+              onClick={() => void confirmImportPickupPoints()}
+            >
+              {importingCsv ? 'Importing…' : 'Import'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <CsvImportGuideTable
+            headers={PICKUP_IMPORT_CSV_HEADERS}
+            requiredHeaders={PICKUP_IMPORT_CSV_REQUIRED}
+            exampleRow={[
+              'Main Gate',
+              '28.6139',
+              '77.2090',
+              '07:30',
+              '14:00',
+              'true',
+              '',
+              '',
+              '',
+            ]}
+            footnote=" Times use HH:mm (24-hour). If dropOffSameAsPickup is true/yes, leave drop location columns empty."
+            sampleHref="/pickup-points-import-sample.csv"
+          />
+          <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-6 text-center">
+            <input
+              key={csvInputKey}
+              ref={csvImportInputRef}
+              id="pickup-csv-import-input"
+              type="file"
+              accept=".csv,text/csv,text/plain"
+              className="sr-only"
+              tabIndex={-1}
+              aria-label="CSV file to import"
+              onChange={onCsvFilePicked}
+            />
+            <p className="text-sm text-slate-500">Step 1 — pick your file</p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3"
+              disabled={importingCsv}
+              onClick={() => csvImportInputRef.current?.click()}
+            >
+              {importFileLabel ? 'Change file' : 'Browse files'}
+            </Button>
+            {importFileLabel ? (
+              <div className="mt-4 rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-left">
+                <p className="text-xs font-medium uppercase tracking-wide text-emerald-800/90">Selected</p>
+                <p className="mt-0.5 truncate text-sm font-semibold text-emerald-950">{importFileLabel}</p>
+                <p className="mt-1 text-xs text-emerald-900/75">Step 2 — press “Import” below.</p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-slate-400">Then confirm with the footer button.</p>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={exportModalOpen}
+        onClose={() => {
+          if (!exportLoading) setExportModalOpen(false)
+        }}
+        title="Export CSV"
+        size="sm"
+        footer={
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              disabled={exportLoading}
+              onClick={() => setExportModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              disabled={exportLoading}
+              onClick={() => void runExportCsv()}
+            >
+              {exportLoading ? 'Preparing…' : 'Download'}
+            </Button>
+          </div>
+        }
+      >
+        <p className="mb-5 text-sm text-slate-500">Pick a slice of the list to download as CSV.</p>
+        <div className="space-y-5" aria-busy={exportLoading}>
+          <fieldset className="min-w-0" disabled={exportLoading}>
+            <legend className="mb-2 text-xs font-medium text-slate-500">Rows</legend>
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              {[
+                {
+                  value: 'current',
+                  label: 'This page',
+                  hint: `Page ${page} of ${exportTotalPages}`,
+                },
+                {
+                  value: 'all',
+                  label: 'Everyone',
+                  hint: 'Full export from server',
+                },
+              ].map((opt, i, arr) => (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-start gap-3 border-slate-100 px-3 py-2.5 transition-colors sm:items-center ${
+                    i < arr.length - 1 ? 'border-b' : ''
+                  } ${exportRange === opt.value ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}
+                >
+                  <input
+                    type="radio"
+                    name="pickup-export-range"
+                    className="mt-0.5 text-indigo-600 focus:ring-indigo-500 sm:mt-0"
+                    checked={exportRange === opt.value}
+                    onChange={() => setExportRange(opt.value)}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-slate-900">{opt.label}</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">{opt.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
       </Modal>
     </div>
   )

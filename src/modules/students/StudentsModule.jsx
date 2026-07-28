@@ -39,6 +39,7 @@ import { filterStudentsForUser } from '../../utils/roleFilters'
 import { required } from '../../utils/validators'
 import { parseCsv } from '../../utils/csvParse'
 import { CsvImportGuideTable } from '../../components/ui/CsvImportGuideTable'
+import { GradeSectionFilters } from '../../components/GradeSectionFilters'
 import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '../../utils/listPagination'
 
 const STUDENT_GENDER_OPTIONS = [
@@ -289,6 +290,8 @@ export function StudentsModule() {
   const [pageSize, setPageSize] = useState(DEFAULT_LIST_PAGE_SIZE)
   const [serverSearchQuery, setServerSearchQuery] = useState('')
   const [debouncedServerSearchQuery, setDebouncedServerSearchQuery] = useState('')
+  const [filterGrade, setFilterGrade] = useState('')
+  const [filterSection, setFilterSection] = useState('')
   /** Full list from GET /api/parents/my-students (API is unpaginated; we slice per page in the UI). */
   const parentMyStudentsRef = useRef([])
 
@@ -346,17 +349,16 @@ export function StudentsModule() {
         const useAssigned =
           user.role === ROLES.TEACHER &&
           !usesPrincipalDirectoryApis(user.role, user.menuAccess, 'students')
+        const listParams = {
+          page: pageNum,
+          limit: pageSize,
+          search: searchQuery,
+          grade: filterGrade,
+          section: filterSection,
+        }
         const res = useAssigned
-          ? await fetchStudentsAssigned(token, {
-              page: pageNum,
-              limit: pageSize,
-              search: searchQuery,
-            })
-          : await fetchStudentsList(token, {
-              page: pageNum,
-              limit: pageSize,
-              search: searchQuery,
-            })
+          ? await fetchStudentsAssigned(token, listParams)
+          : await fetchStudentsList(token, listParams)
         if (res.ok) {
           setRemoteStudents(res.students)
           setStudentTotal(res.total)
@@ -369,7 +371,7 @@ export function StudentsModule() {
         setStudentsLoading(false)
       }
     },
-    [token, user.role, pageSize],
+    [token, user.role, user.menuAccess, pageSize, filterGrade, filterSection],
   )
 
   useEffect(() => {
@@ -1425,6 +1427,21 @@ export function StudentsModule() {
           onPageSizeChange={selectPageSize}
           pageSizeSelectId="students-page-size"
           showSearch
+          toolbar={
+            <GradeSectionFilters
+              idPrefix="students-filter"
+              grade={filterGrade}
+              section={filterSection}
+              onGradeChange={(v) => {
+                setFilterGrade(v)
+                setStudentPage(1)
+              }}
+              onSectionChange={(v) => {
+                setFilterSection(v)
+                setStudentPage(1)
+              }}
+            />
+          }
           serverPagination={remoteStudents !== undefined}
           serverTotal={studentTotal}
           serverPage={studentPage}

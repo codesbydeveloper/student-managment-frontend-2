@@ -9,6 +9,7 @@ import {
   fetchDriverMyTransportRoutes,
   fetchDriverTransportRouteStop,
   fetchDriverTripProgress,
+  fetchDriverTripStartOptions,
   markDriverTripStudentStatus,
   patchDriverTripProgressStop,
   startDriverTrip,
@@ -333,6 +334,13 @@ export default function DriverMapPage() {
   const [tripProgressLoading, setTripProgressLoading] = useState(false)
   const [tripProgressError, setTripProgressError] = useState('')
   const [tripId, setTripId] = useState('')
+  const [startOptions, setStartOptions] = useState({
+    canContinue: false,
+    canStartNew: true,
+    tripId: '',
+    message: '',
+  })
+  const [startOptionsLoading, setStartOptionsLoading] = useState(false)
   const [actionLoadingKey, setActionLoadingKey] = useState('')
   const [viewStudentsOpen, setViewStudentsOpen] = useState(false)
  
@@ -618,29 +626,83 @@ export default function DriverMapPage() {
     void loadTripProgress(saved.tripId)
   }, [token, driverUserId]) 
 
-  const onStartTripFlow = useCallback(async () => {
-    if (!activeRoute?.id) {
-      toast.error('Please select a route first.')
-      return
-    }
-    if (!trip?.active) {
-      onStart()
-    }
-    setTripProgressLoading(true)
-    setTripProgressError('')
-    const res = await startDriverTrip(token, { routeId: activeRoute.id })
-    setTripProgressLoading(false)
-    if (!res.ok) {
-      setTripProgressError(res.error || 'Could not start trip.')
-      toast.error(res.error || 'Could not start trip.')
-      return
-    }
-    setTripProgress(res.progress)
-    const resolvedId = String(res.progress?.tripId || '')
-    setTripId(resolvedId)
-    persistBackendTrip(resolvedId, activeRoute.id)
-    toast.success('Trip route started. Move to current stop.')
-  }, [activeRoute?.id, onStart, token, trip?.active, persistBackendTrip])
+  const loadStartOptions = useCallback(
+    async (routeId) => {
+      const rid = String(routeId ?? '').trim()
+      if (!token || !rid) {
+        setStartOptions({ canContinue: false, canStartNew: true, tripId: '', message: '' })
+        return
+      }
+      setStartOptionsLoading(true)
+      const res = await fetchDriverTripStartOptions(token, rid)
+      setStartOptionsLoading(false)
+      if (!res.ok) {
+        setStartOptions({ canContinue: false, canStartNew: true, tripId: '', message: '' })
+        return
+      }
+      setStartOptions(res.options)
+    },
+    [token],
+  )
+
+  useEffect(() => {
+    if (trip?.active || gpsTripActive) return
+    void loadStartOptions(activeRouteId)
+  }, [activeRouteId, trip?.active, gpsTripActive, loadStartOptions])
+
+  const onStartTripFlow = useCallback(
+    async (mode = 'new') => {
+      if (!activeRoute?.id) {
+        toast.error('Please select a route first.')
+        return
+      }
+      const startMode = mode === 'continue' ? 'continue' : 'new'
+      setTripProgressLoading(true)
+      setTripProgressError('')
+      const res = await startDriverTrip(token, { routeId: activeRoute.id, mode: startMode })
+      setTripProgressLoading(false)
+      if (!res.ok) {
+        // Keep UI on Start trip — never leave a local "in progress" trip after a failed start.
+        if (trip?.active) onStop({ silent: true })
+        setTripId('')
+        setTripProgress(null)
+        if (driverUserId) clearDriverBackendTrip(driverUserId)
+        setTripProgressError(res.error || 'Could not start trip.')
+        toast.error(res.error || 'Could not start trip.')
+        void loadStartOptions(activeRoute.id)
+        return
+      }
+      if (!trip?.active) {
+        const local = onStart({ silent: true })
+        if (!local?.ok) {
+          // Server started but local GPS trip could not — end server trip so state stays consistent.
+          const serverTripId = String(res.progress?.tripId || '').trim()
+          if (token && serverTripId) {
+            await endDriverTrip(token, serverTripId)
+          }
+          setTripProgressError('Could not start live location for this trip.')
+          void loadStartOptions(activeRoute.id)
+          return
+        }
+      }
+      setTripProgress(res.progress)
+      const resolvedId = String(res.progress?.tripId || '')
+      setTripId(resolvedId)
+      persistBackendTrip(resolvedId, activeRoute.id)
+      setStartOptions({ canContinue: false, canStartNew: true, tripId: '', message: '' })
+      toast.success(startMode === 'continue' ? 'Trip continued.' : 'Trip started.')
+    },
+    [
+      activeRoute?.id,
+      onStart,
+      onStop,
+      token,
+      trip?.active,
+      persistBackendTrip,
+      driverUserId,
+      loadStartOptions,
+    ],
+  )
 
   const onEndTrip = useCallback(async () => {
     const tid = String(tripId ?? '').trim()
@@ -655,7 +717,8 @@ export default function DriverMapPage() {
     setTripId('')
     setTripProgress(null)
     setTripProgressError('')
-  }, [onStop, driverUserId, token, tripId])
+    void loadStartOptions(activeRouteId)
+  }, [onStop, driverUserId, token, tripId, loadStartOptions, activeRouteId])
 
   const tryAutoCompleteStop = useCallback(
     async (progressSnapshot, stopId) => {
@@ -811,14 +874,51 @@ export default function DriverMapPage() {
               ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {!trip?.active ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => void onStartTripFlow()}
-                    disabled={Boolean(plateContractIssue) || !activeRoute?.id || tripProgressLoading}
-                  >
-                    Start trip
-                  </Button>
+                  startOptions.canContinue ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void onStartTripFlow('continue')}
+                        disabled={
+                          Boolean(plateContractIssue) ||
+                          !activeRoute?.id ||
+                          tripProgressLoading ||
+                          startOptionsLoading
+                        }
+                      >
+                        Continue
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void onStartTripFlow('new')}
+                        disabled={
+                          Boolean(plateContractIssue) ||
+                          !activeRoute?.id ||
+                          tripProgressLoading ||
+                          startOptionsLoading
+                        }
+                      >
+                        New trip
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void onStartTripFlow('new')}
+                      disabled={
+                        Boolean(plateContractIssue) ||
+                        !activeRoute?.id ||
+                        tripProgressLoading ||
+                        startOptionsLoading
+                      }
+                    >
+                      Start trip
+                    </Button>
+                  )
                 ) : (
                   <Button type="button" size="sm" variant="danger" onClick={onEndTrip}>
                     End trip
@@ -837,6 +937,14 @@ export default function DriverMapPage() {
                   </Button>
                 ) : null}
               </div>
+              {!trip?.active && startOptions.canContinue && startOptions.message ? (
+                <p className="mt-2 text-xs text-amber-800">{startOptions.message}</p>
+              ) : null}
+              {!trip?.active && startOptions.canContinue && !startOptions.message ? (
+                <p className="mt-2 text-xs text-amber-800">
+                  A previous trip still has pending students. Continue from where you left off, or start a new trip.
+                </p>
+              ) : null}
             </div>
 
             <div className="flex h-full flex-col rounded-2xl border border-indigo-100 bg-indigo-50/40 px-4 py-4">

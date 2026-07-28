@@ -1204,15 +1204,106 @@ function mapDriverTripProgress(data) {
 }
 
 /**
+ * Normalize GET /api/drivers/my-trips/start-options response.
+ * Continue is offered only when a prior trip still has pending students.
+ */
+export function mapDriverTripStartOptions(data) {
+  const root =
+    data && typeof data === 'object' && data.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? data.data
+      : data && typeof data === 'object'
+        ? data
+        : {}
+  const optionsRaw = root.options ?? root.modes ?? root.availableModes ?? root.actions
+  const optionList = Array.isArray(optionsRaw)
+    ? optionsRaw.map((o) => String(o?.mode ?? o?.value ?? o?.name ?? o).trim().toLowerCase())
+    : []
+  const hasContinueOption = optionList.includes('continue')
+  const hasNewOption = optionList.includes('new') || optionList.includes('start') || optionList.includes('start_new')
+
+  const canContinue = Boolean(
+    root.canContinue ??
+      root.continueAvailable ??
+      root.allowContinue ??
+      root.hasContinue ??
+      root.can_continue ??
+      hasContinueOption,
+  )
+  const canStartNew = Boolean(
+    root.canStartNew ??
+      root.canStart ??
+      root.allowNew ??
+      root.can_start_new ??
+      (hasNewOption || !optionList.length ? true : hasNewOption) ??
+      true,
+  )
+
+  return {
+    canContinue,
+    canStartNew: canStartNew !== false,
+    tripId: root.tripId != null ? String(root.tripId) : root.continueTripId != null ? String(root.continueTripId) : '',
+    message: String(root.message ?? root.hint ?? '').trim(),
+  }
+}
+
+/**
+ * GET /api/drivers/my-trips/start-options?routeId=
+ * @param {string} token
+ * @param {string|number} routeId
+ */
+export async function fetchDriverTripStartOptions(token, routeId) {
+  if (!token) {
+    return { ok: false, error: 'Not signed in', options: { canContinue: false, canStartNew: true, tripId: '', message: '' } }
+  }
+  const rid = String(routeId ?? '').trim()
+  if (!rid) {
+    return { ok: false, error: 'Missing routeId', options: { canContinue: false, canStartNew: true, tripId: '', message: '' } }
+  }
+  try {
+    const qs = new URLSearchParams({ routeId: rid })
+    const res = await fetch(`${API_BASE_URL}/api/drivers/my-trips/start-options?${qs}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: formatTripFlowError(data, res.status),
+        options: { canContinue: false, canStartNew: true, tripId: '', message: '' },
+      }
+    }
+    return { ok: true, options: mapDriverTripStartOptions(data) }
+  } catch (e) {
+    const msg =
+      e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
+    return {
+      ok: false,
+      error: msg,
+      options: { canContinue: false, canStartNew: true, tripId: '', message: '' },
+    }
+  }
+}
+
+/**
  * POST /api/drivers/my-trips/start — start driver trip flow for route.
  * @param {string} token
- * @param {{ routeId: string|number }} payload
+ * @param {{ routeId: string|number, mode?: 'continue'|'new' }} payload
  */
 export async function startDriverTrip(token, payload) {
   if (!token) return { ok: false, error: 'Not signed in', progress: null }
   const routeId = String(payload?.routeId ?? '').trim()
   if (!routeId) return { ok: false, error: 'Missing routeId', progress: null }
+  const modeRaw = String(payload?.mode ?? '').trim().toLowerCase()
+  const mode = modeRaw === 'continue' || modeRaw === 'new' ? modeRaw : ''
   try {
+    const body = {
+      routeId: /^\d+$/.test(routeId) ? Number(routeId) : routeId,
+    }
+    if (mode) body.mode = mode
     const res = await fetch(`${API_BASE_URL}/api/drivers/my-trips/start`, {
       method: 'POST',
       headers: {
@@ -1220,7 +1311,7 @@ export async function startDriverTrip(token, payload) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ routeId: /^\d+$/.test(routeId) ? Number(routeId) : routeId }),
+      body: JSON.stringify(body),
     })
     const data = await res.json().catch(() => null)
     if (!res.ok) return { ok: false, error: formatTripFlowError(data, res.status), progress: null }
