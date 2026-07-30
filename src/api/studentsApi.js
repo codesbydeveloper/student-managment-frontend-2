@@ -490,7 +490,8 @@ export async function createStudent(token, body) {
 }
 
 /**
- * PATCH /api/students/:id — JSON body: fullName, email, classId (optional), parentIds[], isActive.
+ * PATCH /api/students/:id — partial update: fullName, isActive, parentIds[] always; email, classId,
+ * gender, dateOfBirth, bloodGroup, studentAddress only when the caller supplies them.
  * @param {string} token
  * @param {string|number} studentId
  * @param {{ fullName: string, email: string, classId?: string, parentId?: string, active: boolean }} body
@@ -504,15 +505,19 @@ export async function updateStudent(token, studentId, body) {
     fullName: body.fullName,
     isActive: Boolean(body.active),
     parentIds: parentIdsForApi(body.parentId != null && body.parentId !== '' ? [body.parentId] : []),
-    gender: String(body.gender ?? '').trim(),
-    dateOfBirth: String(body.dateOfBirth ?? '').trim(),
-    bloodGroup: String(body.bloodGroup ?? '').trim(),
-    studentAddress: String(body.studentAddress ?? '').trim(),
   }
   const emailVal = String(body.email ?? '').trim().toLowerCase()
   if (emailVal) payload.email = emailVal
   const classId = idForApi(body.classId)
   if (classId != null) payload.classId = classId
+  /** Required by the API — a blank is rejected, and row actions (active toggle) carry no profile fields. */
+  const gender = String(body.gender ?? '').trim()
+  if (gender) payload.gender = gender
+  const dateOfBirth = String(body.dateOfBirth ?? '').trim()
+  if (dateOfBirth) payload.dateOfBirth = dateOfBirth
+  /** Optional — '' from the edit form clears the value, so only skip when the caller has no field at all. */
+  if (body.bloodGroup != null) payload.bloodGroup = String(body.bloodGroup).trim()
+  if (body.studentAddress != null) payload.studentAddress = String(body.studentAddress).trim()
   try {
     const res = await fetch(`${API_BASE_URL}/api/students/${id}`, {
       method: 'PATCH',
