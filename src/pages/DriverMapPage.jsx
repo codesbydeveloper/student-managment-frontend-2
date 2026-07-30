@@ -16,6 +16,7 @@ import {
   formatStopAssignedStudentLabel,
   stopAssignedStudentCount,
   stopAssignedStudentNamesTitle,
+  driverStopStudentsMatch,
 } from '../api/driversApi'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Modal } from '../components/Modal'
@@ -63,21 +64,42 @@ function studentStatusLabel(status) {
 }
 
 function routeStopToTripStop(routeStop, order) {
+  const fromStudents = Array.isArray(routeStop.students)
+    ? routeStop.students.map((s, idx) => ({
+        id: String(s.id ?? s.studentKey ?? s.tripStopStudentId ?? s.studentId ?? `${routeStop.id ?? order}-s${idx}`),
+        markId: String(s.markId ?? s.studentKey ?? s.tripStopStudentId ?? s.studentId ?? s.id ?? `${routeStop.id ?? order}-s${idx}`),
+        studentKey: s.studentKey,
+        tripStopStudentId: s.tripStopStudentId,
+        studentId: s.studentId,
+        name: s.label || s.name || `Student ${idx + 1}`,
+        label: s.label || s.name,
+        className: s.className,
+        parentName: s.parentName || '—',
+        parentPhone: s.parentPhone || '—',
+        status: s.status || 'pending',
+      }))
+    : []
   const studentNames = Array.isArray(routeStop.studentNames)
     ? routeStop.studentNames.filter(Boolean)
     : routeStop.studentName && routeStop.studentName !== '—'
       ? [routeStop.studentName]
       : []
+  const students =
+    fromStudents.length > 0
+      ? fromStudents
+      : studentNames.map((name, idx) => ({
+          id: `${routeStop.id ?? order}-s${idx}`,
+          markId: `${routeStop.id ?? order}-s${idx}`,
+          name,
+          label: name,
+          status: 'pending',
+        }))
   return {
     id: String(routeStop.id ?? `route-stop-${order}`),
     location: routeStop.location || '—',
     order,
     done: false,
-    students: studentNames.map((name, idx) => ({
-      id: `${routeStop.id ?? order}-s${idx}`,
-      name,
-      status: 'pending',
-    })),
+    students,
   }
 }
 
@@ -129,7 +151,14 @@ function mergeStopStudentDetails(primary, fallback) {
   return {
     ...fallback,
     ...primary,
+    id: primary.id || fallback.id,
+    markId: primary.markId || fallback.markId || primary.id || fallback.id,
+    studentKey: primary.studentKey || fallback.studentKey,
+    tripStopStudentId: primary.tripStopStudentId || fallback.tripStopStudentId,
+    studentId: primary.studentId || fallback.studentId,
     name: primary.name || fallback.name,
+    label: primary.label || fallback.label || primary.name || fallback.name,
+    className: primary.className || fallback.className,
     parentName: parentName || '—',
     parentPhone: parentPhone || '—',
     status: preferMergedStudentStatus(primary.status, fallback.status),
@@ -145,25 +174,45 @@ function studentsAtStop(targetStop, routeStops) {
   )
   if (Array.isArray(targetStop.students) && targetStop.students.length) {
     const routeStudents = routeStop?.students ?? []
-    return targetStop.students.map((st, idx) => {
-      const match =
-        routeStudents.find(
-          (r) =>
-            String(r.id) === String(st.id) ||
-            (r.name && st.name && String(r.name).trim() === String(st.name).trim()),
-        ) ?? routeStudents[idx]
-      return mergeStopStudentDetails(st, match)
+    return targetStop.students.map((st) => {
+      const match = routeStudents.find((r) => driverStopStudentsMatch(r, st))
+      return match ? mergeStopStudentDetails(st, match) : st
     })
   }
   if (routeStop?.students?.length) return routeStop.students
   const names = routeStop?.studentNames?.length ? routeStop.studentNames : []
   return names.map((name, idx) => ({
     id: `route-${routeStop?.id ?? idx}-s${idx}`,
+    markId: `route-${routeStop?.id ?? idx}-s${idx}`,
     name,
+    label: name,
     parentName: '—',
     parentPhone: '—',
     status: 'pending',
   }))
+}
+
+function studentDisplayName(student) {
+  const label = String(student?.label ?? '').trim()
+  if (label) return label
+  const name = String(student?.name ?? '').trim()
+  const className = String(student?.className ?? '').trim()
+  if (name && className) {
+    const classLabel = /^class\b/i.test(className) ? className : `Class ${className}`
+    return `${name} (${classLabel})`
+  }
+  return name || '—'
+}
+
+function studentMarkId(student) {
+  return String(
+    student?.markId ??
+      student?.studentKey ??
+      student?.tripStopStudentId ??
+      student?.id ??
+      student?.studentId ??
+      '',
+  ).trim()
 }
 
 function isStudentHandledForRoute(status, routeType) {
@@ -209,13 +258,18 @@ function DriverStopStudentDetailRow({ student }) {
   const parentPhone = String(student.parentPhone ?? '').trim()
   const displayParentName = parentName && parentName !== '—' ? parentName : '—'
   const displayParentPhone = parentPhone && parentPhone !== '—' ? parentPhone : '—'
+  const displayName = studentDisplayName(student)
+  const className = String(student.className ?? '').trim()
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
       <dl className="grid gap-3 sm:grid-cols-2">
         <div className="min-w-0">
           <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Student name</dt>
-          <dd className="mt-0.5 text-sm font-semibold text-slate-900">{student.name || '—'}</dd>
+          <dd className="mt-0.5 text-sm font-semibold text-slate-900">{displayName}</dd>
+          {className && !/\(class\b/i.test(displayName) ? (
+            <dd className="mt-0.5 text-xs text-slate-500">{/^class\b/i.test(className) ? className : `Class ${className}`}</dd>
+          ) : null}
         </div>
         <div className="min-w-0">
           <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Parent name</dt>
@@ -244,15 +298,17 @@ function DriverStopStudentDetailRow({ student }) {
 function DriverStopStudentRow({ student, routeType, actionLoadingKey, onMark }) {
   const handled = isStudentHandledForRoute(student.status, routeType)
   const primary = primaryActionForRoute(routeType)
+  const markId = studentMarkId(student)
   const rowLoading = Boolean(
     actionLoadingKey &&
       actionLoadingKey.startsWith('student:') &&
-      actionLoadingKey.includes(`:${student.id}:`),
+      actionLoadingKey.includes(`:${markId}:`),
   )
   const parentName = String(student.parentName ?? '').trim()
   const parentPhone = String(student.parentPhone ?? '').trim()
   const hasParent = parentName && parentName !== '—'
   const hasPhone = parentPhone && parentPhone !== '—'
+  const displayName = studentDisplayName(student)
 
   return (
     <div
@@ -261,7 +317,7 @@ function DriverStopStudentRow({ student, routeType, actionLoadingKey, onMark }) 
       }`}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900">{student.name}</p>
+        <p className="text-sm font-semibold text-slate-900">{displayName}</p>
         {hasParent || hasPhone ? (
           <p className="mt-1 text-xs text-slate-600">
             {hasParent ? <span>{parentName}</span> : null}
@@ -290,7 +346,7 @@ function DriverStopStudentRow({ student, routeType, actionLoadingKey, onMark }) 
               type="button"
               size="sm"
               disabled={Boolean(actionLoadingKey)}
-              onClick={() => onMark(student.id, primary.status)}
+              onClick={() => onMark(markId, primary.status)}
             >
               {rowLoading ? 'Saving…' : primary.label}
             </Button>
@@ -299,7 +355,7 @@ function DriverStopStudentRow({ student, routeType, actionLoadingKey, onMark }) 
               size="sm"
               variant="secondary"
               disabled={Boolean(actionLoadingKey)}
-              onClick={() => onMark(student.id, 'absent')}
+              onClick={() => onMark(markId, 'absent')}
             >
               Absent
             </Button>
@@ -524,15 +580,8 @@ export default function DriverMapPage() {
     const tripStudents = Array.isArray(tripMatch.students) ? tripMatch.students : []
     if (!detailStudents.length) return { ...base, ...tripMatch }
 
-    const mergedStudents = detailStudents.map((detailSt, idx) => {
-      const tripSt =
-        tripStudents.find(
-          (t) =>
-            String(t.id) === String(detailSt.id) ||
-            (t.name &&
-              detailSt.name &&
-              String(t.name).trim().toLowerCase() === String(detailSt.name).trim().toLowerCase()),
-        ) ?? tripStudents[idx]
+    const mergedStudents = detailStudents.map((detailSt) => {
+      const tripSt = tripStudents.find((t) => driverStopStudentsMatch(t, detailSt))
       return tripSt ? mergeStopStudentDetails(tripSt, detailSt) : detailSt
     })
     return {
@@ -548,15 +597,8 @@ export default function DriverMapPage() {
     const detailStudents = modalStopDetail?.students
     if (!Array.isArray(detailStudents) || detailStudents.length === 0) return list
     if (!list.length) return detailStudents
-    return detailStudents.map((detailSt, idx) => {
-      const live =
-        list.find(
-          (t) =>
-            String(t.id) === String(detailSt.id) ||
-            (t.name &&
-              detailSt.name &&
-              String(t.name).trim().toLowerCase() === String(detailSt.name).trim().toLowerCase()),
-        ) ?? list[idx]
+    return detailStudents.map((detailSt) => {
+      const live = list.find((t) => driverStopStudentsMatch(t, detailSt))
       return live ? mergeStopStudentDetails(live, detailSt) : detailSt
     })
   }, [modalStop, stops, modalStopDetail])
@@ -787,21 +829,18 @@ export default function DriverMapPage() {
       const markedStatus = res.markedStatus ?? status
       setModalStopDetail((prev) => {
         if (!prev?.students?.length) return prev
+        const markedRef = {
+          id: studentId,
+          markId: studentId,
+          studentKey: studentId,
+          tripStopStudentId: studentId,
+          studentId,
+        }
         return {
           ...prev,
           students: prev.students.map((s) => {
-            const tripMatch = res.stopUpdate?.students?.find(
-              (t) =>
-                String(t.id) === String(s.id) ||
-                (t.name &&
-                  s.name &&
-                  String(t.name).trim().toLowerCase() === String(s.name).trim().toLowerCase()),
-            )
-            if (String(s.id) === String(studentId)) {
+            if (driverStopStudentsMatch(s, markedRef)) {
               return { ...s, status: markedStatus }
-            }
-            if (tripMatch) {
-              return mergeStopStudentDetails(tripMatch, s)
             }
             return s
           }),
@@ -1192,10 +1231,10 @@ export default function DriverMapPage() {
             <div className="space-y-2">
               {modalStudents.map((student) =>
                 isReadOnlyDetailModal ? (
-                  <DriverStopStudentDetailRow key={student.id} student={student} />
+                  <DriverStopStudentDetailRow key={studentMarkId(student) || student.id} student={student} />
                 ) : (
                   <DriverStopStudentRow
-                    key={student.id}
+                    key={studentMarkId(student) || student.id}
                     student={student}
                     routeType={activeType}
                     actionLoadingKey={canMarkStudentsInModal ? actionLoadingKey : null}

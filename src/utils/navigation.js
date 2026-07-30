@@ -409,7 +409,6 @@ const MAIN_CONTENT_HEADER_SKIP = new Set(['/dashboard', '/parent-dashboard'])
  */
 const PATH_NAV_EXTRAS = [
   { prefix: '/transport/live-buses/', navKey: 'transport_live_buses', label: 'Bus trip details' },
-  { prefix: '/transport-assignments', navKey: 'admin_assign_bus', label: 'Transport assignments' },
   { prefix: '/notifications/create', navKey: 'create_notice', label: 'Create notice' },
   { prefix: '/create-notice', navKey: 'create_notice', label: 'Create notice' },
   { prefix: '/notifications/admin-approval', navKey: 'notifications_admin', label: 'Admin approvals' },
@@ -519,7 +518,6 @@ export function navLinkUsesEnd(to) {
     to === '/driver/map' ||
     to === '/driver/routes' ||
     to === '/transport/buses' ||
-    to === '/transport/assign-bus' ||
     to === '/transport/pick-up-points' ||
     to === '/transport/routes' ||
     to === '/transport/live-buses' ||

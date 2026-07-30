@@ -31,11 +31,9 @@ const ParentBusTrackingPage = lazy(() => import('../pages/ParentBusTrackingPage.
 const ParentMyTransportPage = lazy(() => import('../pages/ParentMyTransportPage.jsx'))
 const DriverMapPage = lazy(() => import('../pages/DriverMapPage.jsx'))
 const DriverMyRoutesPage = lazy(() => import('../pages/DriverMyRoutesPage.jsx'))
-const TransportAssignmentsPage = lazy(() => import('../pages/TransportAssignmentsPage.jsx'))
 const CreateBusesPage = lazy(() => import('../pages/CreateBusesPage.jsx'))
 const PickUpPointsPage = lazy(() => import('../pages/PickUpPointsPage.jsx'))
 const TransportRoutesPage = lazy(() => import('../pages/TransportRoutesPage.jsx'))
-const AssignBusPage = lazy(() => import('../pages/AssignBusPage.jsx'))
 const TeacherBusOverviewPage = lazy(() => import('../pages/TeacherBusOverviewPage.jsx'))
 const LiveBusesPage = lazy(() => import('../pages/LiveBusesPage.jsx'))
 const LiveBusDetailPage = lazy(() => import('../pages/LiveBusDetailPage.jsx'))
@@ -425,14 +423,7 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="transport-assignments"
-            element={
-              <ProtectedRoute menuKey="admin_assign_bus" allowedRoles={[ROLES.ADMIN, ROLES.PRINCIPAL]}>
-                <TransportAssignmentsPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="transport-assignments" element={<Navigate to="/transport/routes" replace />} />
           <Route
             path="transport/buses"
             element={
@@ -441,14 +432,7 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="transport/assign-bus"
-            element={
-              <ProtectedRoute menuKey="admin_assign_bus" allowedRoles={[ROLES.ADMIN, ROLES.PRINCIPAL]}>
-                <AssignBusPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="transport/assign-bus" element={<Navigate to="/transport/routes" replace />} />
           <Route
             path="transport/pick-up-points"
             element={

@@ -211,9 +211,9 @@ export default function CreateBusesPage() {
             Dashboard
           </Button>
         </Link>
-        <Link to="/transport-assignments">
+        <Link to="/transport/routes">
           <Button type="button" size="sm" variant="secondary">
-            Transport
+            Routes
           </Button>
         </Link>
         <Link to="/drivers">

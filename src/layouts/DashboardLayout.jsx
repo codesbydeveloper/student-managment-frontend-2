@@ -107,7 +107,6 @@ export function DashboardLayout() {
           ? ['/parent/routes']
           : [
               '/drivers',
-              '/transport/assign-bus',
               '/transport/buses',
               '/transport/pick-up-points',
               '/transport/routes',

@@ -584,7 +584,38 @@ function extractDriverMyTransportRoutesList(data) {
   return []
 }
 
-function mapDriverTransportStopStudent(raw, idx) {
+/**
+ * Unique stop-enrollment identity (never use display name — kids can share names).
+ * Prefer studentKey / tripStopStudentId (e.g. tss-123), then studentId.
+ */
+export function driverStopStudentIdentityKeys(student) {
+  if (!student || typeof student !== 'object') return []
+  return [
+    student.studentKey,
+    student.tripStopStudentId,
+    student.id,
+    student.studentId,
+    student.markId,
+  ]
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+}
+
+/** True when two student rows refer to the same stop enrollment / student id. */
+export function driverStopStudentsMatch(a, b) {
+  const aKeys = new Set(driverStopStudentIdentityKeys(a))
+  if (!aKeys.size) return false
+  return driverStopStudentIdentityKeys(b).some((k) => aKeys.has(k))
+}
+
+function formatDriverStudentClassLabel(className) {
+  const c = String(className ?? '').trim()
+  if (!c) return ''
+  if (/^class\b/i.test(c)) return c
+  return `Class ${c}`
+}
+
+function mapDriverStopStudentFields(raw, idx = 0) {
   if (!raw || typeof raw !== 'object') return null
   const parent =
     raw.parent && typeof raw.parent === 'object'
@@ -599,8 +630,37 @@ function mapDriverTransportStopStudent(raw, idx) {
         ? raw.child
         : null
 
-  const sid = raw.id ?? raw.studentId ?? raw.student_id ?? studentObj?.id ?? studentObj?.studentId
-  const sname = String(
+  const tripStopStudentIdRaw =
+    raw.tripStopStudentId ?? raw.trip_stop_student_id ?? null
+  const studentKeyRaw =
+    raw.studentKey ?? raw.student_key ?? tripStopStudentIdRaw ?? null
+  const studentIdRaw =
+    raw.studentId ??
+    raw.student_id ??
+    studentObj?.id ??
+    studentObj?.studentId ??
+    null
+  /** Legacy payloads sometimes put the enrollment id on `id`. */
+  const legacyId = raw.id ?? null
+
+  const tripStopStudentId =
+    tripStopStudentIdRaw != null && String(tripStopStudentIdRaw).trim()
+      ? String(tripStopStudentIdRaw).trim()
+      : ''
+  const studentKey =
+    studentKeyRaw != null && String(studentKeyRaw).trim()
+      ? String(studentKeyRaw).trim()
+      : tripStopStudentId
+  const studentId =
+    studentIdRaw != null && String(studentIdRaw).trim() ? String(studentIdRaw).trim() : ''
+  const legacy =
+    legacyId != null && String(legacyId).trim() ? String(legacyId).trim() : ''
+
+  /** Path + React key: unique enrollment key first, then student id. */
+  const id = studentKey || tripStopStudentId || studentId || legacy
+  const markId = studentKey || tripStopStudentId || studentId || legacy
+
+  const baseName = String(
     raw.fullName ??
       raw.studentName ??
       raw.student_name ??
@@ -609,7 +669,25 @@ function mapDriverTransportStopStudent(raw, idx) {
       studentObj?.name ??
       '',
   ).trim()
-  if (!sid && !sname) return null
+  const className = String(
+    raw.className ??
+      raw.class_name ??
+      raw.classLabel ??
+      raw.class_label ??
+      raw.classDisplayName ??
+      raw.class_display_name ??
+      studentObj?.className ??
+      studentObj?.class_name ??
+      '',
+  ).trim()
+  const classLabel = formatDriverStudentClassLabel(className)
+  const apiLabel = String(raw.label ?? '').trim()
+  const name =
+    apiLabel ||
+    (baseName && classLabel ? `${baseName} (${classLabel})` : baseName) ||
+    (id ? `Student ${id}` : `Student ${idx + 1}`)
+
+  if (!id && !baseName && !apiLabel) return null
 
   const parentName = String(
     raw.parentName ??
@@ -629,8 +707,14 @@ function mapDriverTransportStopStudent(raw, idx) {
   ).trim()
 
   return {
-    id: sid != null ? String(sid) : `student-${idx}-${sname}`,
-    name: sname || `Student ${idx + 1}`,
+    id: id || `student-${idx}-${baseName || 'x'}`,
+    markId: markId || id || `student-${idx}`,
+    studentKey: studentKey || undefined,
+    tripStopStudentId: tripStopStudentId || undefined,
+    studentId: studentId || undefined,
+    name,
+    label: apiLabel || name,
+    className: className || undefined,
     parentName: parentName || '—',
     parentPhone: parentPhone || '—',
     status: String(
@@ -641,9 +725,15 @@ function mapDriverTransportStopStudent(raw, idx) {
         raw.pickup_status ??
         raw.boardingStatus ??
         raw.boarding_status ??
+        raw.tripStatus ??
+        raw.trip_status ??
         'pending',
     ),
   }
+}
+
+function mapDriverTransportStopStudent(raw, idx) {
+  return mapDriverStopStudentFields(raw, idx)
 }
 
 export function mapDriverTransportStopRow(raw, routeType) {
@@ -690,11 +780,10 @@ export function mapDriverTransportStopRow(raw, routeType) {
       '',
   ).trim()
   const studentNames = studentsList
-    .map((s) =>
-      String(
-        s?.fullName ?? s?.studentName ?? s?.student_name ?? s?.name ?? '',
-      ).trim(),
-    )
+    .map((s, idx) => {
+      const mapped = mapDriverTransportStopStudent(s, idx)
+      return String(mapped?.label ?? mapped?.name ?? s?.fullName ?? s?.studentName ?? s?.name ?? '').trim()
+    })
     .filter(Boolean)
   const studentCountRaw = Number(
     raw.studentsCount ?? raw.studentCount ?? raw.students_count ?? studentNames.length,
@@ -763,7 +852,7 @@ export function stopAssignedStudentNamesTitle(stop) {
   if (names.length) return names.join(', ')
   if (Array.isArray(stop?.students)) {
     return stop.students
-      .map((s) => String(s?.name ?? '').trim())
+      .map((s) => String(s?.label ?? s?.name ?? '').trim())
       .filter(Boolean)
       .join(', ')
   }
@@ -936,44 +1025,8 @@ function formatTripFlowError(data, status) {
   return `Trip request failed (${status})`
 }
 
-function mapTripStudentRow(raw) {
-  if (!raw || typeof raw !== 'object') return null
-  const parent =
-    raw.parent && typeof raw.parent === 'object'
-      ? raw.parent
-      : raw.guardian && typeof raw.guardian === 'object'
-        ? raw.guardian
-        : null
-  const id = raw.id ?? raw.studentId ?? raw.student_id ?? raw.userId
-  const name = String(raw.fullName ?? raw.studentName ?? raw.student_name ?? raw.name ?? '').trim() || '—'
-  const status = String(
-    raw.status ??
-      raw.studentStatus ??
-      raw.student_status ??
-      raw.tripStatus ??
-      raw.trip_status ??
-      raw.pickupStatus ??
-      '',
-  ).trim()
-  const parentName = String(
-    raw.parentName ?? raw.parent_name ?? parent?.fullName ?? parent?.name ?? '',
-  ).trim()
-  const parentPhone = String(
-    raw.parentPhone ??
-      raw.parent_phone ??
-      raw.phone ??
-      raw.mobile ??
-      parent?.phone ??
-      parent?.mobile ??
-      '',
-  ).trim()
-  return {
-    id: id != null ? String(id) : `${name}-${Math.random().toString(36).slice(2, 7)}`,
-    name,
-    parentName: parentName || '—',
-    parentPhone: parentPhone || '—',
-    status: status || 'pending',
-  }
+function mapTripStudentRow(raw, idx = 0) {
+  return mapDriverStopStudentFields(raw, idx)
 }
 
 function tripStudentStatusKey(status) {
@@ -987,31 +1040,69 @@ function tripStudentStatusKey(status) {
 
 /** Build per-student rows from mark/complete payloads (studentIds + pendingStudents). */
 function mapTripStopStudentsFromSummary(raw, defaultHandledStatus = 'picked_up') {
-  const ids = Array.isArray(raw.studentIds) ? raw.studentIds : []
+  const ids = Array.isArray(raw.studentIds)
+    ? raw.studentIds
+    : Array.isArray(raw.studentKeys)
+      ? raw.studentKeys
+      : Array.isArray(raw.tripStopStudentIds)
+        ? raw.tripStopStudentIds
+        : []
   if (!ids.length) return null
   const names = Array.isArray(raw.studentNames) ? raw.studentNames : []
+  const labels = Array.isArray(raw.studentLabels) ? raw.studentLabels : []
   const pendingList = Array.isArray(raw.pendingStudents) ? raw.pendingStudents : []
   const pendingIds = new Set(
-    pendingList.map((p) => String(p.studentId ?? p.id ?? '')).filter(Boolean),
+    pendingList
+      .flatMap((p) =>
+        driverStopStudentIdentityKeys(
+          mapDriverStopStudentFields(p) || {
+            id: p.studentKey ?? p.tripStopStudentId ?? p.studentId ?? p.id,
+            studentKey: p.studentKey,
+            tripStopStudentId: p.tripStopStudentId,
+            studentId: p.studentId ?? p.id,
+          },
+        ),
+      )
+      .filter(Boolean),
   )
-  const pendingById = new Map(
-    pendingList.map((p) => [String(p.studentId ?? p.id ?? ''), p]),
-  )
+  const pendingById = new Map()
+  for (const p of pendingList) {
+    const mapped = mapDriverStopStudentFields(p)
+    for (const k of driverStopStudentIdentityKeys(mapped || p)) {
+      if (k && !pendingById.has(k)) pendingById.set(k, mapped || p)
+    }
+  }
   const doneStatus =
     tripStudentStatusKey(defaultHandledStatus) === 'dropped_off' ? 'dropped_off' : 'picked_up'
 
   return ids.map((id, idx) => {
     const sid = String(id)
     const pendingRow = pendingById.get(sid)
-    const name = String(
-      names[idx] ?? pendingRow?.studentName ?? pendingRow?.student_name ?? '',
+    const mappedPending =
+      pendingRow && typeof pendingRow === 'object' && pendingRow.name
+        ? pendingRow
+        : mapDriverStopStudentFields(pendingRow)
+    const label = String(
+      labels[idx] ??
+        mappedPending?.label ??
+        names[idx] ??
+        mappedPending?.name ??
+        pendingRow?.studentName ??
+        pendingRow?.student_name ??
+        '',
     ).trim()
     const status = pendingIds.has(sid) ? 'pending' : doneStatus
     return {
       id: sid,
-      name: name || `Student ${idx + 1}`,
-      parentName: '—',
-      parentPhone: '—',
+      markId: sid,
+      studentKey: sid,
+      tripStopStudentId: sid.startsWith('tss-') ? sid : undefined,
+      studentId: mappedPending?.studentId,
+      name: label || `Student ${idx + 1}`,
+      label: label || `Student ${idx + 1}`,
+      className: mappedPending?.className,
+      parentName: mappedPending?.parentName || '—',
+      parentPhone: mappedPending?.parentPhone || '—',
       status,
     }
   })
@@ -1026,7 +1117,14 @@ function mergeTripStudentRows(existing, summary) {
   return {
     ...summary,
     ...existing,
+    id: existing.id || summary.id,
+    markId: existing.markId || summary.markId || existing.id || summary.id,
+    studentKey: existing.studentKey || summary.studentKey,
+    tripStopStudentId: existing.tripStopStudentId || summary.tripStopStudentId,
+    studentId: existing.studentId || summary.studentId,
     name: existing.name || summary.name,
+    label: existing.label || summary.label || existing.name || summary.name,
+    className: existing.className || summary.className,
     parentName: existing.parentName && existing.parentName !== '—' ? existing.parentName : summary.parentName,
     parentPhone:
       existing.parentPhone && existing.parentPhone !== '—' ? existing.parentPhone : summary.parentPhone,
@@ -1039,15 +1137,11 @@ function mapTripStopRow(raw, fallbackOrder = 0, options = {}) {
   const id = raw.id ?? raw.stopId ?? raw.stop_id ?? raw.pickupPointId
   let studentsRaw = raw.students ?? raw.studentList ?? raw.children ?? raw.passengers ?? []
   if (!Array.isArray(studentsRaw)) studentsRaw = []
-  let students = studentsRaw.map(mapTripStudentRow).filter(Boolean)
+  let students = studentsRaw.map((s, idx) => mapTripStudentRow(s, idx)).filter(Boolean)
   const summaryStudents = mapTripStopStudentsFromSummary(raw, options.defaultHandledStatus)
   if (summaryStudents?.length) {
     students = summaryStudents.map((sumSt) => {
-      const existing = students.find(
-        (e) =>
-          String(e.id) === String(sumSt.id) ||
-          (e.name && sumSt.name && String(e.name).trim() === String(sumSt.name).trim()),
-      )
+      const existing = students.find((e) => driverStopStudentsMatch(e, sumSt))
       return mergeTripStudentRows(existing, sumSt)
     })
   }
@@ -1061,7 +1155,9 @@ function mapTripStopRow(raw, fallbackOrder = 0, options = {}) {
     students.length === 0 && studentsCount > 0
       ? Array.from({ length: studentsCount }, (_, i) => ({
           id: `pending-${id ?? order}-${i + 1}`,
+          markId: `pending-${id ?? order}-${i + 1}`,
           name: `Student ${i + 1}`,
+          label: `Student ${i + 1}`,
           status: 'pending',
         }))
       : students
@@ -1391,7 +1487,15 @@ export async function markDriverTripStudentStatus(token, { tripId, stopId, stude
       stopUpdate = {
         ...stopUpdate,
         students: stopUpdate.students.map((s) =>
-          String(s.id) === String(studentId) ? { ...s, status: markedStatus } : s,
+          driverStopStudentsMatch(s, {
+            id: studentId,
+            markId: studentId,
+            studentKey: studentId,
+            tripStopStudentId: studentId,
+            studentId,
+          })
+            ? { ...s, status: markedStatus }
+            : s,
         ),
       }
     }
