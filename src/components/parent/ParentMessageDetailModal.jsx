@@ -11,6 +11,7 @@ import {
   formatNotificationApprovalAttribution,
   isApprovedNoticeStatus,
 } from '../../api/notificationsApi'
+import { formatNotificationDateOnly } from '../../utils/notificationFormat'
 import { AudienceForSection } from './AudienceForSection'
 
 const categoryBadge = {
@@ -105,6 +106,11 @@ export function ParentMessageDetailModal({
   const showRejection =
     showBody &&
     (item.status === NOTIFICATION_STATUSES.REJECTED || Boolean(rejectionText || item.rejectedAt))
+  const receivedDate = showBody
+    ? formatNotificationDateOnly(
+        item.receivedAt ?? item.submittedAt ?? item.approvedAt ?? item.updatedAt ?? '',
+      )
+    : ''
 
   return (
     <Modal
@@ -128,21 +134,31 @@ export function ParentMessageDetailModal({
       ) : null}
       {showBody ? (
         <div className="space-y-4 text-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h4 className="text-base font-bold text-slate-900 sm:text-lg">{item.title}</h4>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className={
-                  categoryBadge[item.category] || 'bg-slate-50 text-slate-800 ring-slate-200/60'
-                }
-              >
-                {NOTIFICATION_CATEGORY_LABELS[item.category] || item.category}
-              </Badge>
-              {item.status ? (
-                <StatusBadge status={item.status} variant="inline" />
-              ) : (
-                <Badge className="bg-emerald-100 text-emerald-900 ring-emerald-600/25">Approved</Badge>
-              )}
+          <div className="flex flex-wrap items-center gap-3">
+            <h4 className="min-w-0 flex-1 text-base font-bold text-slate-900 sm:text-lg">
+              {item.title}
+            </h4>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+              {receivedDate ? (
+                <p className="text-xs font-medium tabular-nums text-slate-600">
+                  <span className="font-semibold text-slate-500">Date</span>{' '}
+                  <span className="text-slate-800">{receivedDate}</span>
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  className={
+                    categoryBadge[item.category] || 'bg-slate-50 text-slate-800 ring-slate-200/60'
+                  }
+                >
+                  {NOTIFICATION_CATEGORY_LABELS[item.category] || item.category}
+                </Badge>
+                {item.status ? (
+                  <StatusBadge status={item.status} variant="inline" />
+                ) : (
+                  <Badge className="bg-emerald-100 text-emerald-900 ring-emerald-600/25">Approved</Badge>
+                )}
+              </div>
             </div>
           </div>
 

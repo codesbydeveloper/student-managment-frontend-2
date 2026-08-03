@@ -216,3 +216,23 @@ export function formatTransportSafetyTime(value) {
 export function formatNotificationDateTime(value) {
   return formatTransportSafetyTime(value)
 }
+
+/**
+ * Date only as DD-MM-YYYY (no time) for parent school messages.
+ * @param {string | number | Date | null | undefined} value
+ * @returns {string}
+ */
+export function formatNotificationDateOnly(value) {
+  if (value == null || value === '') return ''
+  const s = String(value).trim()
+  const dayFirst = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/)
+  if (dayFirst) {
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${pad(Number(dayFirst[1]))}-${pad(Number(dayFirst[2]))}-${dayFirst[3]}`
+  }
+  const ms = parseNotificationTimestampMs(value)
+  if (Number.isNaN(ms)) return ''
+  const d = new Date(ms)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`
+}

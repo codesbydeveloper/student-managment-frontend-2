@@ -795,6 +795,19 @@ export function mapApiParentMessageToFeedItem(raw) {
     approvedByName: approver.approvedByName || undefined,
     approvedByRole: approver.approvedByRole || undefined,
     approvedByRoleLabel: approver.approvedByRoleLabel || undefined,
+    /** When the parent got / the school sent this notice (prefer delivery time). */
+    receivedAt:
+      raw.receivedAt ??
+      raw.received_at ??
+      raw.deliveredAt ??
+      raw.delivered_at ??
+      raw.sentAt ??
+      raw.sent_at ??
+      raw.approvedAt ??
+      raw.submittedAt ??
+      raw.createdAt ??
+      raw.created_at ??
+      null,
     submittedAt: raw.submittedAt ?? raw.createdAt ?? raw.sentAt ?? null,
     approvedAt: raw.approvedAt ?? null,
     updatedAt: raw.updatedAt ?? null,

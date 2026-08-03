@@ -5,6 +5,7 @@ import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_CATEGORY_LABELS,
 } from '../../utils/notificationConstants'
+import { formatNotificationDateOnly } from '../../utils/notificationFormat'
 
 const categoryBadge = {
   [NOTIFICATION_CATEGORIES.ADMINISTRATIVE]:
@@ -24,6 +25,9 @@ const categoryBadge = {
 export function NotificationCard({ item, showViewButton = false, onViewClick, viewLoading = false }) {
   const cat = item.category
   const catCls = categoryBadge[cat] || 'bg-slate-50 text-slate-800 ring-slate-200/60'
+  const receivedDate = formatNotificationDateOnly(
+    item.receivedAt ?? item.submittedAt ?? item.approvedAt ?? item.updatedAt ?? '',
+  )
 
   const openDetail = showViewButton && onViewClick && !viewLoading ? onViewClick : undefined
 
@@ -44,30 +48,40 @@ export function NotificationCard({ item, showViewButton = false, onViewClick, vi
       role={openDetail ? 'button' : undefined}
       tabIndex={openDetail ? 0 : undefined}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h3 className="text-base font-bold leading-snug text-slate-900 sm:text-lg">{item.title}</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge className={catCls}>{NOTIFICATION_CATEGORY_LABELS[cat] || cat}</Badge>
-          <Badge className="bg-emerald-100 text-emerald-900 ring-emerald-600/25">Approved</Badge>
-          {!item.isRead ? (
-            <Badge className="bg-indigo-100 text-indigo-900 ring-indigo-600/25">Unread</Badge>
-          ) : (
-            <Badge className="bg-slate-100 text-slate-700 ring-slate-400/30">Read</Badge>
-          )}
-          {showViewButton ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                onViewClick?.()
-              }}
-              disabled={viewLoading}
-            >
-              {viewLoading ? 'Loading…' : 'View'}
-            </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="min-w-0 flex-1 text-base font-bold leading-snug text-slate-900 sm:text-lg">
+          {item.title}
+        </h3>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+          {receivedDate ? (
+            <p className="text-xs font-medium tabular-nums text-slate-600">
+              <span className="font-semibold text-slate-500">Date</span>{' '}
+              <span className="text-slate-800">{receivedDate}</span>
+            </p>
           ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className={catCls}>{NOTIFICATION_CATEGORY_LABELS[cat] || cat}</Badge>
+            <Badge className="bg-emerald-100 text-emerald-900 ring-emerald-600/25">Approved</Badge>
+            {!item.isRead ? (
+              <Badge className="bg-indigo-100 text-indigo-900 ring-indigo-600/25">Unread</Badge>
+            ) : (
+              <Badge className="bg-slate-100 text-slate-700 ring-slate-400/30">Read</Badge>
+            )}
+            {showViewButton ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewClick?.()
+                }}
+                disabled={viewLoading}
+              >
+                {viewLoading ? 'Loading…' : 'View'}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 
