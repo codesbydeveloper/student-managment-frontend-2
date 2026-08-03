@@ -2075,21 +2075,22 @@ function mapReadReportParentRow(raw) {
     childrenNames.push(raw.studentName.trim())
   }
   const readRaw = raw.readAt ?? raw.read_at ?? raw.openedAt ?? raw.opened_at
+  const readStatus = String(raw.readStatus ?? raw.read_status ?? '').trim().toLowerCase()
   const isRead =
     raw.isRead === true ||
     raw.is_read === true ||
     raw.read === true ||
+    readStatus === 'read' ||
+    readStatus === 'opened' ||
     (readRaw != null &&
       readRaw !== false &&
       readRaw !== 0 &&
       readRaw !== '0' &&
       readRaw !== 'false' &&
       String(readRaw).trim() !== '')
+  /** Keep API day-first strings as-is; the UI formatter understands `DD-MM-YYYY, …`. */
   let readAt = readRaw
-  if (typeof readAt === 'string') {
-    const t = Date.parse(readAt)
-    readAt = Number.isFinite(t) ? t : readAt
-  } else if (typeof readAt === 'number' && readAt > 0 && readAt < 1e11) {
+  if (typeof readAt === 'number' && readAt > 0 && readAt < 1e11) {
     readAt *= 1000
   }
   if (!parentName && !id && !childrenNames.length) return null

@@ -10,21 +10,15 @@ import {
   fetchNotificationReadReportExport,
 } from '../../api/notificationsApi'
 import { downloadBlobFile } from '../../utils/busAssignmentExport'
+import { formatNotificationDateTime } from '../../utils/notificationFormat'
 
 const REPORT_PAGE_SIZE = 20
 
 function fmtReadTime(ts) {
   if (ts == null || ts === '') return '—'
-  try {
-    const d = typeof ts === 'number' ? new Date(ts) : new Date(ts)
-    if (Number.isNaN(d.getTime())) return '—'
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(d)
-  } catch {
-    return '—'
-  }
+  /** API sends day-first strings like `02-09-2024, 10:27:40 AM EST` — `new Date(...)` cannot parse those. */
+  const formatted = formatNotificationDateTime(ts)
+  return formatted || '—'
 }
 
 function childrenLabel(row) {
