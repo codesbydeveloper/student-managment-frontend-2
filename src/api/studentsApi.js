@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../utils/constants'
+import { fetchImportSampleCsv } from '../utils/fetchImportSampleCsv'
 
 function formatMutationError(data, status) {
   if (data == null) return `Request failed (${status})`
@@ -566,6 +567,17 @@ export async function deleteStudent(token, studentId) {
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg }
   }
+}
+
+/**
+ * GET /api/students/import/sample.csv — Bearer; downloads the official import sample CSV.
+ */
+export async function fetchStudentsImportSampleCsv(token) {
+  return fetchImportSampleCsv(token, {
+    url: `${API_BASE_URL}/api/students/import/sample.csv`,
+    defaultFilename: 'students-import-sample.csv',
+    formatError: formatMutationError,
+  })
 }
 
 /**

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../utils/constants'
+import { fetchImportSampleCsv } from '../utils/fetchImportSampleCsv'
 import { extractNotificationApproverFields } from './notificationsApi'
 import { parseDashboardTimestampMs } from '../utils/dashboardDateParse'
 import { pickLastActivityFromApi } from '../utils/lastActivityDisplay'
@@ -422,6 +423,17 @@ export async function deleteParent(token, parentId) {
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg }
   }
+}
+
+/**
+ * GET /api/parents/import/sample.csv — Bearer; downloads the official import sample CSV.
+ */
+export async function fetchParentsImportSampleCsv(token) {
+  return fetchImportSampleCsv(token, {
+    url: `${API_BASE_URL}/api/parents/import/sample.csv`,
+    defaultFilename: 'parents-import-sample.csv',
+    formatError: formatMutationError,
+  })
 }
 
 /**

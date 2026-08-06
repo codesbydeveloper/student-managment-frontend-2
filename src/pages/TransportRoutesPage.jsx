@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'react-toastify'
 import { useAuth } from '../context/AuthContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { fetchAllBuses } from '../api/busesApi'
 import { fetchDriversPicker } from '../api/driversApi'
-import { fetchPickupPointsPicker } from '../api/pickupPointsApi'
+import { fetchPickupPointsPicker, normalizeTimeForInput } from '../api/pickupPointsApi'
 import {
   createTransportRoute,
   deleteTransportRoute,
@@ -85,6 +86,41 @@ function buildPickupLabelMap(ids, labels, labelById = {}) {
   return map
 }
 
+/** Route detail stops carry the stop name and times even when the picker does not return that point. */
+function mergePickupOptionsWithStops(options, stopById, routeType) {
+  const entries = Object.entries(stopById || {})
+  if (!entries.length) return options
+  const isDrop = routeType === 'drop'
+  const byId = new Map(options.map((o) => [o.value, o]))
+  entries.forEach(([rawId, stop]) => {
+    const id = String(rawId)
+    const name = String(stop?.label || '').trim()
+    const apiTime = isDrop ? stop?.dropTime : stop?.pickupTime
+    const fromStop = {
+      value: id,
+      label: name || `Pick up point #${id}`,
+      locationName: name || undefined,
+      pickupTime: normalizeTimeForInput(stop?.pickupTime),
+      dropTime: normalizeTimeForInput(stop?.dropTime),
+      subtext: apiTime ? `${isDrop ? 'Drop' : 'Pick'} ${apiTime}` : undefined,
+    }
+    const existing = byId.get(id)
+    if (!existing) {
+      byId.set(id, fromStop)
+      return
+    }
+    byId.set(id, {
+      ...existing,
+      label: existing.locationName ? existing.label : fromStop.label,
+      locationName: existing.locationName || fromStop.locationName,
+      pickupTime: existing.pickupTime || fromStop.pickupTime,
+      dropTime: existing.dropTime || fromStop.dropTime,
+      subtext: existing.subtext || fromStop.subtext,
+    })
+  })
+  return [...byId.values()]
+}
+
 function mergePickupOptionsWithIds(options, ids, labels) {
   const byId = new Map(options.map((o) => [o.value, o]))
   ids.forEach((id) => {
@@ -148,6 +184,7 @@ export default function TransportRoutesPage() {
   const [editRouteType, setEditRouteType] = useState('pick_up')
   const [editPickupPointLabels, setEditPickupPointLabels] = useState({})
   const [editPickupPointOptions, setEditPickupPointOptions] = useState([])
+  const [editRouteStops, setEditRouteStops] = useState({})
   const [editPickupPickerLoading, setEditPickupPickerLoading] = useState(false)
   const [editPickupPickerError, setEditPickupPickerError] = useState(null)
   const [editLoading, setEditLoading] = useState(false)
@@ -348,8 +385,13 @@ export default function TransportRoutesPage() {
   )
 
   const mergedEditPickupPointOptions = useMemo(
-    () => mergePickupOptionsWithIds(editPickupPointOptions, editPickupPointIds, editPickupPointLabels),
-    [editPickupPointOptions, editPickupPointIds, editPickupPointLabels],
+    () =>
+      mergePickupOptionsWithStops(
+        mergePickupOptionsWithIds(editPickupPointOptions, editPickupPointIds, editPickupPointLabels),
+        editRouteStops,
+        editRouteType,
+      ),
+    [editPickupPointOptions, editPickupPointIds, editPickupPointLabels, editRouteStops, editRouteType],
   )
 
   const syncPickupLabels = useCallback((ids, options, setLabels) => {
@@ -447,6 +489,7 @@ export default function TransportRoutesPage() {
     setEditRouteType('pick_up')
     setEditPickupPointLabels({})
     setEditPickupPointOptions([])
+    setEditRouteStops({})
     setEditPickupPickerError(null)
     setEditLoading(false)
   }
@@ -463,6 +506,7 @@ export default function TransportRoutesPage() {
       route.pickupPointLabelById || {},
     )
     setEditPickupPointLabels((prev) => ({ ...prev, ...labels }))
+    setEditRouteStops((prev) => ({ ...prev, ...(route.pickupPointStopById || {}) }))
     setEditPickupPointOptions((prev) =>
       mergePickupOptionsWithIds(prev, route.pickupPointIds || [], { ...labels }),
     )
@@ -917,8 +961,9 @@ export default function TransportRoutesPage() {
       </Card>
 
       {editOpen ? (
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !editSaving) closeEdit()
@@ -1065,7 +1110,9 @@ export default function TransportRoutesPage() {
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
+        )
       ) : null}
     </div>
   )

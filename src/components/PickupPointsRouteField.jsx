@@ -195,19 +195,16 @@ export function PickupPointsRouteField({
       const opt = optionsByValue.get(pointId)
       const resolvedName = String(pointLabels[pointId] || '').trim()
       const timeLabel = scheduledTimeForOption(opt, routeType)
-      let locationLabel = locationLabelFromOption(opt)
-      if ((!locationLabel || locationLabel === '—') && resolvedName) {
-        locationLabel = resolvedName
-      }
-      const fullLabel =
-        resolvedName ||
-        (opt?.label && !GENERIC_PICKUP_LABEL.test(opt.label) ? opt.label : '') ||
-        locationLabel !== '—'
-          ? locationLabel
-          : `Pick up point #${pointId}`
-      const detail =
-        opt?.subtext ||
-        (fullLabel !== locationLabel ? fullLabel.replace(`${locationLabel} - `, '').trim() : '')
+      const optionLabel = locationLabelFromOption(opt)
+      const namedLabel =
+        optionLabel !== '—'
+          ? optionLabel
+          : resolvedName && !GENERIC_PICKUP_LABEL.test(resolvedName)
+            ? resolvedName
+            : ''
+      /** Stop is on the route but its details are missing from the picker (e.g. point was deleted). */
+      const locationLabel = namedLabel || `Pick up point #${pointId}`
+      const detail = namedLabel ? opt?.subtext || '' : 'Stop details are no longer available'
       return {
         value: pointId,
         order: index + 1,

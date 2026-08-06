@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../utils/constants'
+import { fetchImportSampleCsv } from '../utils/fetchImportSampleCsv'
 import { pickLastActivityFromApi } from '../utils/lastActivityDisplay'
 
 function formatListError(data, status) {
@@ -2008,6 +2009,17 @@ export async function exportDriversCsv(token, { rows, status, page, limit } = {}
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg, useClient: true }
   }
+}
+
+/**
+ * GET /api/drivers/import/sample.csv — Bearer; downloads the official import sample CSV.
+ */
+export async function fetchDriversImportSampleCsv(token) {
+  return fetchImportSampleCsv(token, {
+    url: `${API_BASE_URL}/api/drivers/import/sample.csv`,
+    defaultFilename: 'drivers-import-sample.csv',
+    formatError: formatMutationError,
+  })
 }
 
 /**

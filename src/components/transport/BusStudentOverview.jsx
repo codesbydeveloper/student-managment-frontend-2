@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAsyncLoader } from '../../hooks/useAsyncLoader'
 import { toast } from 'react-toastify'
 import {
@@ -496,8 +497,9 @@ export function BusStudentOverview({
       </Card>
 
       {showEdit && editOpen ? (
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !editMutating && !editLoading) closeEditModal()
@@ -652,12 +654,15 @@ export function BusStudentOverview({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
+        )
       ) : null}
 
       {showExport && exportModalOpen ? (
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !exporting) closeExportModal()
@@ -708,7 +713,9 @@ export function BusStudentOverview({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
+        )
       ) : null}
     </>
   )

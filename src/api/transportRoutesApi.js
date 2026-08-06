@@ -74,6 +74,43 @@ function extractRoutesList(data) {
   }
 }
 
+function extractStops(raw) {
+  if (!raw || typeof raw !== 'object') return []
+  const stops = Array.isArray(raw.stops)
+    ? raw.stops
+    : Array.isArray(raw.routeStops)
+      ? raw.routeStops
+      : Array.isArray(raw.route_stops)
+        ? raw.route_stops
+        : []
+  return stops.filter((s) => s && typeof s === 'object')
+}
+
+function stopPickupPointId(stop) {
+  const id =
+    stop.pickupPointId ??
+    stop.pickup_point_id ??
+    (stop.pickupPoint && typeof stop.pickupPoint === 'object' ? stop.pickupPoint.id : null) ??
+    (Array.isArray(stop.pickupPointIds) ? stop.pickupPointIds[0] : null)
+  return id != null ? String(id) : ''
+}
+
+/** id -> { label, pickupTime, dropTime } — the detail endpoint carries stop data only under stops[]. */
+function extractStopDetailsById(raw) {
+  const map = {}
+  extractStops(raw).forEach((stop) => {
+    const id = stopPickupPointId(stop)
+    if (!id || map[id]) return
+    const point = stop.pickupPoint && typeof stop.pickupPoint === 'object' ? stop.pickupPoint : null
+    map[id] = {
+      label: pickText(stop.location) || pickupPointLabelFromObject(point) || pickText(stop.name),
+      pickupTime: pickText(stop.pickupTime ?? stop.pickup_time ?? point?.pickupTime),
+      dropTime: pickText(stop.dropTime ?? stop.drop_time ?? point?.dropTime),
+    }
+  })
+  return map
+}
+
 function extractPickupPointIds(raw) {
   if (!raw || typeof raw !== 'object') return []
   if (Array.isArray(raw.pickupPointIds)) return raw.pickupPointIds.map((id) => String(id))
@@ -84,7 +121,9 @@ function extractPickupPointIds(raw) {
       .filter((id) => id != null)
       .map((id) => String(id))
   }
-  return []
+  return extractStops(raw)
+    .map((stop) => stopPickupPointId(stop))
+    .filter(Boolean)
 }
 
 function pickupPointLabelFromObject(p) {
@@ -100,7 +139,10 @@ function extractPickupPointLabels(raw) {
   if (Array.isArray(raw.pickupPointLabels)) {
     return raw.pickupPointLabels.map((l) => String(l).trim()).filter(Boolean)
   }
-  return []
+  const stopDetails = extractStopDetailsById(raw)
+  return extractPickupPointIds(raw)
+    .map((id) => stopDetails[id]?.label || '')
+    .filter(Boolean)
 }
 
 function extractPickupPointCount(raw) {
@@ -128,6 +170,9 @@ function extractPickupPointCount(raw) {
 function extractPickupPointLabelById(raw) {
   const map = {}
   if (!raw || typeof raw !== 'object') return map
+  Object.entries(extractStopDetailsById(raw)).forEach(([id, stop]) => {
+    if (stop.label) map[id] = stop.label
+  })
   if (Array.isArray(raw.pickupPoints)) {
     raw.pickupPoints.forEach((p) => {
       const id = p?.id ?? p?.pickupPointId ?? p?.pickup_point_id
@@ -176,6 +221,7 @@ export function mapTransportRouteRow(raw) {
   const pickupPointIds = extractPickupPointIds(raw)
   const pickupPointLabels = extractPickupPointLabels(raw)
   const pickupPointLabelById = extractPickupPointLabelById(raw)
+  const pickupPointStopById = extractStopDetailsById(raw)
   const pickupPointCount = Math.max(
     pickupPointIds.length,
     pickupPointLabels.length,
@@ -195,6 +241,7 @@ export function mapTransportRouteRow(raw) {
     driverLabel,
     pickupPointLabels,
     pickupPointLabelById,
+    pickupPointStopById,
   }
 }
 
@@ -343,6 +390,7 @@ export async function enrichRoutesWithPickupStops(token, routes) {
       pickupPointIds: full.pickupPointIds,
       pickupPointLabels: full.pickupPointLabels,
       pickupPointLabelById: full.pickupPointLabelById,
+      pickupPointStopById: full.pickupPointStopById,
       pickupPointCount: full.pickupPointCount,
     }
   })

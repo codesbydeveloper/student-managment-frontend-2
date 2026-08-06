@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiBase = (env.VITE_API_URL || 'https://darkgreen-chamois-549964.hostingersite.com').replace(/\/$/, '')
+  const apiBase = (env.VITE_API_URL || 'https://scsapp.dharshschoolofexcellence.co.in/').replace(/\/$/, '')
 
   return {
   plugins: [

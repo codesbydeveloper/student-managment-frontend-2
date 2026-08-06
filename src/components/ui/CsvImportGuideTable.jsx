@@ -28,11 +28,16 @@ export function CsvImportGuideTable({
   requiredHeaders = [],
   exampleRow,
   sampleHref,
+  onSampleDownload,
+  sampleDownloading = false,
+  sampleLabel = 'Download sample CSV',
   roomPillHeaders = [],
   footnote,
 }) {
   const required = new Set(requiredHeaders)
   const roomPills = new Set(roomPillHeaders)
+  const linkClass =
+    'text-xs font-semibold text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline disabled:cursor-wait disabled:opacity-60'
 
   return (
     <div className="min-w-0 max-w-full rounded-xl border border-slate-200/80 bg-slate-50/60 px-3 py-3.5 sm:px-4">
@@ -92,14 +97,21 @@ export function CsvImportGuideTable({
         </table>
       </div>
 
-      {sampleHref ? (
+      {onSampleDownload ? (
         <p className="mt-2.5">
-          <a
-            href={sampleHref}
-            download
-            className="text-xs font-semibold text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline"
+          <button
+            type="button"
+            disabled={sampleDownloading}
+            onClick={() => void onSampleDownload()}
+            className={linkClass}
           >
-            Download sample CSV
+            {sampleDownloading ? 'Downloading…' : sampleLabel}
+          </button>
+        </p>
+      ) : sampleHref ? (
+        <p className="mt-2.5">
+          <a href={sampleHref} download className={linkClass}>
+            {sampleLabel}
           </a>
         </p>
       ) : null}

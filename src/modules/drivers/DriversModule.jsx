@@ -21,6 +21,7 @@ import {
   createDriver,
   deleteDriver,
   exportDriversCsv,
+  fetchDriversImportSampleCsv,
   fetchDriversList,
   formatDriverImportResultMessage,
   importDriversCsv,
@@ -103,6 +104,7 @@ export function DriversModule() {
   const [importFileLabel, setImportFileLabel] = useState('')
   const [pendingImportFile, setPendingImportFile] = useState(null)
   const [csvInputKey, setCsvInputKey] = useState(0)
+  const [sampleCsvDownloading, setSampleCsvDownloading] = useState(false)
   const csvImportInputRef = useRef(null)
 
   const exportTotalPages = useMemo(
@@ -420,6 +422,25 @@ export function DriversModule() {
     setImportFileLabel(file.name)
   }
 
+  const downloadDriverImportSample = async () => {
+    if (!token) {
+      toast.error('Sign in to download the sample CSV.')
+      return
+    }
+    if (sampleCsvDownloading) return
+    setSampleCsvDownloading(true)
+    try {
+      const res = await fetchDriversImportSampleCsv(token)
+      if (!res.ok) {
+        toast.error(res.error || 'Could not download sample CSV.')
+        return
+      }
+      downloadBlobFile(res.blob, res.filename || 'drivers-import-sample.csv')
+    } finally {
+      setSampleCsvDownloading(false)
+    }
+  }
+
   const confirmImportDrivers = async () => {
     if (!pendingImportFile || importingCsv) return
     if (!token) {
@@ -682,10 +703,11 @@ export function DriversModule() {
       >
         <div className="space-y-4">
           <CsvImportGuideTable
-            headers={['fullName', 'email', 'phone', 'licenseNumber', 'assignedBus', 'active']}
-            requiredHeaders={['fullName', 'email', 'phone', 'licenseNumber']}
-            exampleRow={['Driver One', 'driver1@school.test', '5550401', 'DL-1001', 'GJ-02-QM-8256', 'yes']}
-            sampleHref="/drivers-import-sample.csv"
+            headers={['fullName', 'email', 'phone', 'licenseNumber', 'password', 'active']}
+            requiredHeaders={['fullName', 'email', 'phone', 'licenseNumber', 'password']}
+            exampleRow={['Driver One', 'driver1@school.test', '5550401', 'DL-1001', 'ChangeMe123!', 'yes']}
+            onSampleDownload={downloadDriverImportSample}
+            sampleDownloading={sampleCsvDownloading}
           />
 
           <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-6 text-center">

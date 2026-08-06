@@ -8,6 +8,7 @@ import {
   deletePickupPoint,
   exportPickupPointsCsv,
   fetchPickupPointById,
+  fetchPickupPointsImportSampleCsv,
   fetchPickupPointsList,
   importPickupPointsCsv,
   updatePickupPoint,
@@ -131,6 +132,7 @@ export default function PickUpPointsPage() {
   const [importFileLabel, setImportFileLabel] = useState('')
   const [pendingImportFile, setPendingImportFile] = useState(null)
   const [csvInputKey, setCsvInputKey] = useState(0)
+  const [sampleCsvDownloading, setSampleCsvDownloading] = useState(false)
   const csvImportInputRef = useRef(null)
 
   useEffect(() => {
@@ -625,6 +627,25 @@ export default function PickUpPointsPage() {
     setImportFileLabel(file.name)
   }
 
+  const downloadPickupImportSample = async () => {
+    if (!token) {
+      toast.error('Sign in to download the sample CSV.')
+      return
+    }
+    if (sampleCsvDownloading) return
+    setSampleCsvDownloading(true)
+    try {
+      const res = await fetchPickupPointsImportSampleCsv(token)
+      if (!res.ok) {
+        toast.error(res.error || 'Could not download sample CSV.')
+        return
+      }
+      downloadBlobFile(res.blob, res.filename || 'pickup-points-import-sample.csv')
+    } finally {
+      setSampleCsvDownloading(false)
+    }
+  }
+
   const confirmImportPickupPoints = async () => {
     if (!pendingImportFile || importingCsv) return
     if (!token) {
@@ -1109,7 +1130,8 @@ export default function PickUpPointsPage() {
               '',
             ]}
             footnote=" Times use HH:mm (24-hour). If dropOffSameAsPickup is true/yes, leave drop location columns empty."
-            sampleHref="/pickup-points-import-sample.csv"
+            onSampleDownload={downloadPickupImportSample}
+            sampleDownloading={sampleCsvDownloading}
           />
           <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-6 text-center">
             <input

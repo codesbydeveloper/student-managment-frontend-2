@@ -7,6 +7,7 @@ import {
   fetchAllClassesList,
   fetchClassesAssigned,
   fetchClassById,
+  fetchClassesImportSampleCsv,
   fetchClassesList,
   importClassesCsv,
   mapApiClassToRow,
@@ -249,6 +250,7 @@ export function ClassesModule() {
   const [importFileLabel, setImportFileLabel] = useState('')
   const [pendingImportFile, setPendingImportFile] = useState(null)
   const [csvInputKey, setCsvInputKey] = useState(0)
+  const [sampleCsvDownloading, setSampleCsvDownloading] = useState(false)
   const csvImportInputRef = useRef(null)
 
   const baseClasses = remoteClasses !== undefined ? remoteClasses : classes
@@ -436,6 +438,25 @@ export function ClassesModule() {
     if (!file) return
     setPendingImportFile(file)
     setImportFileLabel(file.name)
+  }
+
+  const downloadClassImportSample = async () => {
+    if (!token) {
+      toast.error('Sign in to download the sample CSV.')
+      return
+    }
+    if (sampleCsvDownloading) return
+    setSampleCsvDownloading(true)
+    try {
+      const res = await fetchClassesImportSampleCsv(token)
+      if (!res.ok) {
+        toast.error(res.error || 'Could not download sample CSV.')
+        return
+      }
+      downloadBlobFile(res.blob, res.filename || 'classes-import-sample.csv')
+    } finally {
+      setSampleCsvDownloading(false)
+    }
   }
 
   const confirmImportClasses = async () => {
@@ -863,7 +884,8 @@ export function ClassesModule() {
             requiredHeaders={CLASS_IMPORT_CSV_REQUIRED}
             exampleRow={['Class 9A', '9', 'A', '20', 'teacher@school.com']}
             footnote="To assign more than one teacher, list their emails separated by a semicolon (e.g. a@school.com;b@school.com). "
-            sampleHref="/classes-import-sample.csv"
+            onSampleDownload={downloadClassImportSample}
+            sampleDownloading={sampleCsvDownloading}
           />
           <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-6 text-center">
             <input

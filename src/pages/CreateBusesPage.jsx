@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useAuth } from '../context/AuthContext'
@@ -363,8 +364,9 @@ export default function CreateBusesPage() {
       </Card>
 
       {editOpen ? (
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center"
           role="presentation"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !editSaving) closeEdit()
@@ -415,7 +417,9 @@ export default function CreateBusesPage() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
+        )
       ) : null}
     </div>
   )

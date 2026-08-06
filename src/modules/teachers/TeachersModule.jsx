@@ -7,6 +7,7 @@ import {
   exportTeachersCsv,
   fetchAllTeachersList,
   fetchTeacherById,
+  fetchTeachersImportSampleCsv,
   fetchTeachersList,
   importTeachersCsv,
   mapApiTeacherToRow,
@@ -262,6 +263,7 @@ export function TeachersModule() {
   /** File chosen in the modal; import runs when the user clicks “Add teachers”. */
   const [pendingImportFile, setPendingImportFile] = useState(null)
   const [csvInputKey, setCsvInputKey] = useState(0)
+  const [sampleCsvDownloading, setSampleCsvDownloading] = useState(false)
   const csvImportInputRef = useRef(null)
   /** `null` = use app classes; non-null array = options from GET /api/classes/summary */
   const [pickerClassOptions, setPickerClassOptions] = useState(null)
@@ -775,6 +777,25 @@ export function TeachersModule() {
     setImportFileLabel(file.name)
   }
 
+  const downloadTeacherImportSample = async () => {
+    if (!token) {
+      toast.error('Sign in to download the sample CSV.')
+      return
+    }
+    if (sampleCsvDownloading) return
+    setSampleCsvDownloading(true)
+    try {
+      const res = await fetchTeachersImportSampleCsv(token)
+      if (!res.ok) {
+        toast.error(res.error || 'Could not download sample CSV.')
+        return
+      }
+      downloadBlobFile(res.blob, res.filename || 'teachers-import-sample.csv')
+    } finally {
+      setSampleCsvDownloading(false)
+    }
+  }
+
   const confirmImportTeachers = async () => {
     if (!pendingImportFile || importingCsv) return
 
@@ -1167,7 +1188,8 @@ export function TeachersModule() {
               'yes',
             ]}
             footnote=" one class → grade 10 + section A · more classes → grade 10,11 + section A,B (comma between values; put quotes around the cell in CSV). active: true or yes."
-            sampleHref="/teachers-import-sample.csv"
+            onSampleDownload={downloadTeacherImportSample}
+            sampleDownloading={sampleCsvDownloading}
           />
 
           <div className="rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-6 text-center">

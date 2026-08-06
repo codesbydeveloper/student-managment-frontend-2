@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../utils/constants'
+import { fetchImportSampleCsv } from '../utils/fetchImportSampleCsv'
 
 function formatListError(data, status) {
   if (data == null) return `Request failed (${status})`
@@ -629,6 +630,17 @@ export async function deletePickupPoint(token, id) {
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg }
   }
+}
+
+/**
+ * GET /api/transport/pickup-points/import/sample.csv — Bearer; downloads the official import sample CSV.
+ */
+export async function fetchPickupPointsImportSampleCsv(token) {
+  return fetchImportSampleCsv(token, {
+    url: `${API_BASE_URL}/api/transport/pickup-points/import/sample.csv`,
+    defaultFilename: 'pickup-points-import-sample.csv',
+    formatError: formatListError,
+  })
 }
 
 /**

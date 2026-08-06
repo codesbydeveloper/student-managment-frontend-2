@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../utils/constants'
+import { fetchImportSampleCsv } from '../utils/fetchImportSampleCsv'
 
 function formatMutationError(data, status) {
   if (data == null) return `Request failed (${status})`
@@ -685,6 +686,19 @@ export async function exportClassesCsv(token, { rows, page, limit } = {}) {
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg, useClient: true }
   }
+}
+
+/**
+ * GET /api/classes/import/sample.csv — Bearer; downloads the official import sample CSV.
+ * @param {string} token
+ * @returns {Promise<{ ok: true, blob: Blob, filename: string } | { ok: false, error: string }>}
+ */
+export async function fetchClassesImportSampleCsv(token) {
+  return fetchImportSampleCsv(token, {
+    url: `${API_BASE_URL}/api/classes/import/sample.csv`,
+    defaultFilename: 'classes-import-sample.csv',
+    formatError: formatMutationError,
+  })
 }
 
 /**

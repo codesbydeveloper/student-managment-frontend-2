@@ -45,11 +45,6 @@ export default function ParentMyTransportPage() {
             Dashboard
           </Button>
         </Link>
-        <Link to="/parent-bus">
-          <Button type="button" size="sm" variant="secondary">
-            Bus tracking
-          </Button>
-        </Link>
       </div>
 
       <Card>

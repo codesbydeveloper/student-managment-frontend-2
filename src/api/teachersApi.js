@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../utils/constants'
+import { fetchImportSampleCsv } from '../utils/fetchImportSampleCsv'
 import { pickLastActivityFromApi } from '../utils/lastActivityDisplay'
 import { pickApprovedAtMs } from '../utils/notificationTimestamps'
 
@@ -559,6 +560,17 @@ export async function exportTeachersCsv(token, { rows, status, page, limit }) {
       e instanceof TypeError && e.message.includes('fetch') ? 'Cannot reach server.' : 'Network error.'
     return { ok: false, error: msg, useClient: true }
   }
+}
+
+/**
+ * GET /api/teachers/import/sample.csv — Bearer; downloads the official import sample CSV.
+ */
+export async function fetchTeachersImportSampleCsv(token) {
+  return fetchImportSampleCsv(token, {
+    url: `${API_BASE_URL}/api/teachers/import/sample.csv`,
+    defaultFilename: 'teachers-import-sample.csv',
+    formatError: formatMutationError,
+  })
 }
 
 /**
