@@ -19,7 +19,7 @@ const TRANSPORT_SAFETY_KINDS = new Set([
 export function isParentTransportSafetyNotification(item) {
   if (!item || typeof item !== 'object') return false
   const kind = String(item.kind ?? item.type ?? '').trim().toLowerCase()
-  if (TRANSPORT_SAFETY_KINDS.has(kind)) return true
+  if (TRANSPORT_SAFETY_KINDS.has(kind) || kind === 'transport_safety') return true
   const category = String(item.category ?? '').trim().toLowerCase()
   if (category === 'transport' && item.alertKey) return true
   const title = String(item.title ?? '').trim().toLowerCase()
@@ -32,6 +32,7 @@ export function isParentTransportSafetyNotification(item) {
  */
 export function getTransportBellStudentId(item) {
   if (!item) return null
+  if (item.studentId != null) return item.studentId
   const t = item.transport
   if (t && typeof t === 'object' && t.studentId != null) return t.studentId
   const key = String(item.alertKey ?? '').trim()
@@ -135,6 +136,10 @@ export function parentTransportSafetyToneClasses(isAbsent) {
  */
 export function parentStudentStatusFromBellAlert(alert) {
   if (!alert || typeof alert !== 'object') return ''
+  const top = alert.studentStatus ?? alert.student_status
+  if (top != null && String(top).trim()) {
+    return String(top).trim().toLowerCase()
+  }
   const fromTransport = alert.transport?.studentStatus
   if (fromTransport != null && String(fromTransport).trim()) {
     return String(fromTransport).trim().toLowerCase()

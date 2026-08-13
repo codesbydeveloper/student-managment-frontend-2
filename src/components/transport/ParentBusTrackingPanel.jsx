@@ -11,6 +11,7 @@ import { isSocketTransportEnabled } from '../../modules/transport/transportSocke
 import { useParentBusLiveMap } from '../../modules/transport/useParentBusLiveMap'
 import { useParentBusLiveSocketSync } from '../../modules/transport/useParentBusLiveSocketSync'
 import { useParentBusLiveStatus } from '../../modules/transport/useParentBusLiveStatus'
+import { useParentTransportAlertSocket } from '../../modules/transport/useParentTransportAlertSocket'
 import { useParentTripStatusCatchUp } from '../../modules/transport/useParentTripStatusCatchUp'
 import { ParentBusConnectingBanner } from './ParentBusConnectingBanner'
 import {
@@ -49,6 +50,8 @@ function parseBusNumericIdForSocket(busKey) {
   }
   return null
 }
+
+const PARENT_LAST_BUS_MAP_POS_KEY = 'scs_parent_last_bus_map_pos_v1'
 
 /** Ignore bad backend ETA/distance (e.g. wrong coordinates). */
 function saneEtaMinutes(minutes) {
@@ -209,19 +212,31 @@ export function ParentBusTrackingPanel({
 
   const bellAlertKeysRef = useRef('')
 
+  /** One-shot bell fetch on open / refresh only — live updates come from `transport:alert`. */
   useEffect(() => {
     void loadBellTransportAlerts()
   }, [loadBellTransportAlerts])
 
-  /** Bell can update before my-bus-live; poll bell lightly while this page is open. */
-  useEffect(() => {
-    if (!token || user?.role !== ROLES.PARENT) return undefined
-    const tick = () => {
-      if (document.visibilityState === 'visible') void loadBellTransportAlerts()
-    }
-    const id = window.setInterval(tick, 30_000)
-    return () => window.clearInterval(id)
-  }, [token, user?.role, loadBellTransportAlerts])
+  const onSocketTransportAlert = useCallback((alert) => {
+    if (!alert) return
+    const key = String(alert.alertKey || alert.id || '').trim()
+    if (!key) return
+    setBellTransportAlerts((prev) => {
+      const idx = prev.findIndex((a) => String(a.alertKey || a.id || '') === key)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = { ...prev[idx], ...alert }
+        return next
+      }
+      return [alert, ...prev]
+    })
+  }, [])
+
+  useParentTransportAlertSocket({
+    token,
+    enabled: user?.role === ROLES.PARENT && Boolean(token),
+    onAlert: onSocketTransportAlert,
+  })
 
   useEffect(() => {
     const keys = bellTransportAlerts
@@ -361,18 +376,62 @@ export function ParentBusTrackingPanel({
     reconnectNonce: socketReconnectNonce,
   })
 
+  // Live bus position comes from Socket.IO only (no /my-driver/location polling).
+  // Persist last socket GPS so Inactive / End trip still shows the bus.
+  const [lastKnownBusPos, setLastKnownBusPos] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(PARENT_LAST_BUS_MAP_POS_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      const lat = Number(parsed?.lat)
+      const lng = Number(parsed?.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return null
+      return /** @type {[number, number]} */ ([lat, lng])
+    } catch {
+      return null
+    }
+  })
+
+  useEffect(() => {
+    if (!socketMapPos) return
+    setLastKnownBusPos(socketMapPos)
+    try {
+      window.localStorage.setItem(
+        PARENT_LAST_BUS_MAP_POS_KEY,
+        JSON.stringify({ lat: socketMapPos[0], lng: socketMapPos[1], ts: Date.now() }),
+      )
+    } catch {
+      /* quota / private mode */
+    }
+  }, [socketMapPos])
+
   const restLivePos = useMemo(() => {
     const lat = selectedLive?.live?.lat
     const lng = selectedLive?.live?.lng
-    if (Number.isFinite(lat) && Number.isFinite(lng)) return [lat, lng]
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+      return [lat, lng]
+    }
+    return null
+  }, [selectedLive])
+
+  const currentStopBusPos = useMemo(() => {
+    const cs = selectedLive?.stopProgress?.currentStop
+    if (!cs) return null
+    const lat = Number(cs.latitude ?? cs.lat)
+    const lng = Number(cs.longitude ?? cs.lng ?? cs.lon)
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+      return [lat, lng]
+    }
     return null
   }, [selectedLive])
 
   const mapPos = useMemo(() => {
-    if (socketMapPos && socketDriverLive) return socketMapPos
+    if (socketMapPos) return socketMapPos
+    if (lastKnownBusPos) return lastKnownBusPos
     if (restLivePos) return restLivePos
-    return socketMapPos
-  }, [socketMapPos, socketDriverLive, restLivePos])
+    if (currentStopBusPos) return currentStopBusPos
+    return null
+  }, [socketMapPos, lastKnownBusPos, restLivePos, currentStopBusPos])
 
   const pickupMarkers = useMemo(() => {
     const markers = []
@@ -584,8 +643,20 @@ export function ParentBusTrackingPanel({
       selectedLive?.live?.isRunning ||
         socketDriverLive ||
         socketIsRunning === true ||
-        selectedLive?.stopProgress?.yourStopStatus,
+        selectedLive?.stopProgress?.yourStopStatus ||
+        selectedLive?.stopProgress?.currentStop,
     )
+
+  /**
+   * Bus icon: socket GPS first, then last saved GPS, then near pickup (even when Inactive).
+   * No /my-driver/location polling — that endpoint was hammering the server.
+   */
+  const busMapPos = useMemo(() => {
+    if (mapPos) return mapPos
+    const base = pickupMarkers[0]?.position
+    if (!base || !Number.isFinite(base[0]) || !Number.isFinite(base[1])) return null
+    return [base[0] + 0.0015, base[1] + 0.0015]
+  }, [mapPos, pickupMarkers])
 
   const pickupPointLabel =
     selectedLive?.pickupPoint?.location ??
@@ -848,15 +919,15 @@ export function ParentBusTrackingPanel({
         </p>
       ) : null}
 
-      {mapPos || pickupMarkers.length ? (
+      {busMapPos || pickupMarkers.length ? (
         <ParentBusLiveMap
-          position={mapPos}
+          position={busMapPos}
           routeLine={routeLine}
           label={vehicleLabel ? `Bus ${vehicleLabel}` : 'School bus'}
           minHeight={mapMinHeight}
           pickupMarkers={pickupMarkers}
-          fitAllMarkers={!tripLooksLive || pickupMarkers.length > 0}
-          followBus={tripLooksLive}
+          fitAllMarkers
+          followBus={Boolean(busMapPos && tripLooksLive)}
         />
       ) : (
         <div

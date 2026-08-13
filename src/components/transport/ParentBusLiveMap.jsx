@@ -6,33 +6,118 @@ import { OSM_TILE_LAYER_URL } from '../../modules/transport/transportMapConstant
 import { getBusMapIcon } from '../../modules/transport/transportBusMapIcon'
 import { getPickupMapIcon } from '../../modules/transport/transportPickupMapIcon'
 
-function MapFollowPosition({ center, enabled }) {
+function isSaneLatLng(lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false
+  if (lat === 0 && lng === 0) return false
+  return true
+}
+
+function MapInvalidateSize() {
   const map = useMap()
   useEffect(() => {
-    if (!enabled || !center?.length) return
-    map.panTo(center, { animate: true })
-  }, [center, map, enabled])
+    const id = window.setTimeout(() => {
+      try {
+        map.invalidateSize()
+      } catch {
+        /* ignore */
+      }
+    }, 100)
+    return () => window.clearTimeout(id)
+  }, [map])
   return null
 }
 
-function MapFitBounds({ points }) {
+/**
+ * Same approach as driver LiveTripMap: imperative Leaflet marker (reliable with divIcon).
+ */
+function DriverStyleBusMarker({ position, label }) {
+  const map = useMap()
+  const markerRef = useRef(/** @type {L.Marker | null} */ (null))
+
+  useEffect(() => {
+    if (!isSaneLatLng(position?.[0], position?.[1])) {
+      if (markerRef.current) {
+        markerRef.current.remove()
+        markerRef.current = null
+      }
+      return undefined
+    }
+
+    const latLng = L.latLng(position[0], position[1])
+    if (!markerRef.current) {
+      const marker = L.marker(latLng, {
+        icon: getBusMapIcon(),
+        keyboard: false,
+        riseOnHover: true,
+        zIndexOffset: 2000,
+      }).addTo(map)
+      marker.bindTooltip(label || 'Bus', {
+        direction: 'top',
+        opacity: 0.95,
+        permanent: true,
+      })
+      markerRef.current = marker
+    } else {
+      markerRef.current.setLatLng(latLng)
+      const tip = markerRef.current.getTooltip()
+      if (tip) tip.setContent(label || 'Bus')
+    }
+
+    return undefined
+  }, [map, position, label])
+
+  useEffect(
+    () => () => {
+      if (markerRef.current) {
+        markerRef.current.remove()
+        markerRef.current = null
+      }
+    },
+    [map],
+  )
+
+  return null
+}
+
+function MapFollowBus({ position, enabled }) {
   const map = useMap()
   useEffect(() => {
-    if (!points?.length) return
-    if (points.length === 1) {
-      map.setView(points[0], 15, { animate: true })
+    if (!enabled || !isSaneLatLng(position?.[0], position?.[1])) return
+    map.setView(position, Math.max(map.getZoom(), 15), { animate: true })
+  }, [position, map, enabled])
+  return null
+}
+
+function MapFitPoints({ points }) {
+  const map = useMap()
+  useEffect(() => {
+    const sane = (points ?? []).filter((p) => isSaneLatLng(p?.[0], p?.[1]))
+    if (!sane.length) return
+    if (sane.length === 1) {
+      map.setView(sane[0], 15, { animate: true })
       return
     }
-    const bounds = L.latLngBounds(points)
+    const bounds = L.latLngBounds(sane)
+    if (!bounds.isValid()) return
+    const ne = bounds.getNorthEast()
+    const sw = bounds.getSouthWest()
+    const span = Math.max(Math.abs(ne.lat - sw.lat), Math.abs(ne.lng - sw.lng))
+    if (span > 2.5) {
+      map.setView(sane[0], 15, { animate: true })
+      return
+    }
     map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16, animate: true })
   }, [points, map])
   return null
 }
 
-function RecenterOnBusControl({ position }) {
+function RecenterControl({ busPosition, fallbackPosition }) {
   const map = useMap()
-  const positionRef = useRef(position)
-  positionRef.current = position
+  const busRef = useRef(busPosition)
+  const fallbackRef = useRef(fallbackPosition)
+  busRef.current = busPosition
+  fallbackRef.current = fallbackPosition
 
   useEffect(() => {
     const control = new L.Control({ position: 'topright' })
@@ -49,8 +134,14 @@ function RecenterOnBusControl({ position }) {
       L.DomEvent.disableClickPropagation(wrap)
       L.DomEvent.on(btn, 'click', (e) => {
         L.DomEvent.stop(e)
-        const pos = positionRef.current
-        if (!pos?.length || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) return
+        const bus = busRef.current
+        const fallback = fallbackRef.current
+        const pos = isSaneLatLng(bus?.[0], bus?.[1])
+          ? bus
+          : isSaneLatLng(fallback?.[0], fallback?.[1])
+            ? fallback
+            : null
+        if (!pos) return
         map.setView(pos, Math.max(map.getZoom(), 15), { animate: true })
       })
       return wrap
@@ -65,17 +156,7 @@ function RecenterOnBusControl({ position }) {
 }
 
 /**
- * React Leaflet + OpenStreetMap (SOW parent map). No Google Maps.
- * @param {{
- *   position: [number, number] | null,
- *   routeLine?: [number, number][],
- *   label?: string,
- *   className?: string,
- *   minHeight?: string,
- *   pickupMarkers?: { id?: string | number, position: [number, number], label: string, variant?: string }[],
- *   fitAllMarkers?: boolean,
- *   followBus?: boolean,
- * }} props
+ * Parent live map — bus marker uses the same Leaflet approach as the driver map.
  */
 export function ParentBusLiveMap({
   position,
@@ -88,37 +169,27 @@ export function ParentBusLiveMap({
   followBus = true,
 }) {
   const line = routeLine.length >= 2 ? routeLine : []
-  const busIcon = useMemo(() => getBusMapIcon(), [])
 
   const validPickups = useMemo(
     () =>
-      pickupMarkers.filter(
-        (m) =>
-          m?.position?.length === 2 &&
-          Number.isFinite(m.position[0]) &&
-          Number.isFinite(m.position[1]),
-      ),
+      pickupMarkers.filter((m) => isSaneLatLng(m?.position?.[0], m?.position?.[1])),
     [pickupMarkers],
   )
 
+  const showBus = isSaneLatLng(position?.[0], position?.[1])
+
   const fitPoints = useMemo(() => {
     const pts = []
-    if (position?.length === 2 && Number.isFinite(position[0]) && Number.isFinite(position[1])) {
-      pts.push(position)
-    }
+    if (showBus) pts.push(position)
     for (const m of validPickups) pts.push(m.position)
     return pts
-  }, [position, validPickups])
+  }, [showBus, position, validPickups])
 
   const mapCenter = useMemo(() => {
-    if (position?.length === 2 && Number.isFinite(position[0])) return position
+    if (showBus) return position
     if (validPickups[0]?.position) return validPickups[0].position
     return [20.5937, 78.9629]
-  }, [position, validPickups])
-
-  const showBus = Boolean(
-    position?.length === 2 && Number.isFinite(position[0]) && Number.isFinite(position[1]),
-  )
+  }, [showBus, position, validPickups])
 
   return (
     <div className={`space-y-1.5 ${className}`}>
@@ -132,6 +203,7 @@ export function ParentBusLiveMap({
         aria-label="Map showing bus location and pickup points"
       >
         <TileLayer attribution="" url={OSM_TILE_LAYER_URL} />
+        <MapInvalidateSize />
         {line.length ? (
           <Polyline positions={line} pathOptions={{ color: '#6366f1', weight: 4, opacity: 0.75 }} />
         ) : null}
@@ -143,21 +215,18 @@ export function ParentBusLiveMap({
             keyboard={false}
             riseOnHover
           >
-            <Tooltip direction="top" opacity={0.95} permanent={validPickups.length === 1}>
+            <Tooltip direction="top" opacity={0.95} permanent={validPickups.length === 1 && !showBus}>
               {m.label}
             </Tooltip>
           </Marker>
         ))}
-        {showBus ? (
-          <Marker position={position} icon={busIcon} keyboard={false} riseOnHover zIndexOffset={1000}>
-            <Tooltip direction="top" opacity={0.95}>
-              {label}
-            </Tooltip>
-          </Marker>
-        ) : null}
-        {fitAllMarkers && fitPoints.length > 1 ? <MapFitBounds points={fitPoints} /> : null}
-        {showBus ? <MapFollowPosition center={position} enabled={followBus && fitPoints.length <= 1} /> : null}
-        {showBus ? <RecenterOnBusControl position={position} /> : null}
+        {showBus ? <DriverStyleBusMarker position={position} label={label} /> : null}
+        {fitAllMarkers && fitPoints.length > 0 ? <MapFitPoints points={fitPoints} /> : null}
+        {showBus ? <MapFollowBus position={position} enabled={followBus} /> : null}
+        <RecenterControl
+          busPosition={showBus ? position : null}
+          fallbackPosition={validPickups[0]?.position ?? null}
+        />
       </MapContainer>
     </div>
   )

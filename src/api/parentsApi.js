@@ -1864,6 +1864,20 @@ function mapParentBusLiveStudent(raw) {
                   stopOrder: spRaw.currentStop.stopOrder ?? spRaw.currentStop.stop_order,
                   location: String(spRaw.currentStop.location ?? '').trim() || '—',
                   status: String(spRaw.currentStop.status ?? '').trim(),
+                  latitude: (() => {
+                    const n = Number(
+                      spRaw.currentStop.latitude ?? spRaw.currentStop.lat ?? spRaw.currentStop.latitud,
+                    )
+                    return Number.isFinite(n) ? n : null
+                  })(),
+                  longitude: (() => {
+                    const n = Number(
+                      spRaw.currentStop.longitude ??
+                        spRaw.currentStop.lng ??
+                        spRaw.currentStop.lon,
+                    )
+                    return Number.isFinite(n) ? n : null
+                  })(),
                 }
               : null,
           stopsBeforeYou: spRaw.stopsBeforeYou ?? spRaw.stops_before_you ?? null,

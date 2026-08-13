@@ -14,6 +14,7 @@ import { API_BASE_URL } from '../../utils/constants'
  * - Server → parent: `joined` `{ busId, room }` (room e.g. `bus-3`)
  * - Parent → server: `subscribe:bus` `{ busId: <numeric buses.id> }` if `joined.room` is null
  * - Server → parent: `bus:location` `{ lat, lng, speed, busId, ts, isRunning, busNumericId? }`
+ * - Server → parent (room `parent-<userId>`): `transport:alert` pickup/drop/absent safety push
  * - Driver → server: `bus:location` (same payload) while trip is running (~every 10–15s)
  *
  * **Override:** `VITE_SOCKET_TRANSPORT_URL` if socket is on another origin.
@@ -28,6 +29,8 @@ export const SOCKET_EVENTS = {
   BUS_LOCATION: 'bus:location',
   /** Legacy relay / older servers. */
   BUS_LOCATION_LEGACY: 'bus-location',
+  /** Server → parent: pickup / drop / absent safety alert (no bell polling needed). */
+  TRANSPORT_ALERT: 'transport:alert',
   /** Client → server: join or refresh subscription (`busId` numeric from `buses.id`, or string plate if server allows). */
   SUBSCRIBE_BUS: 'subscribe:bus',
   /** Client → server: leave bus room (admin / principal detail page). */

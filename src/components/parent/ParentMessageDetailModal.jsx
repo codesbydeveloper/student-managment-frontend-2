@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { TbCheck, TbCopy } from 'react-icons/tb'
 import { Modal } from '../Modal'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
@@ -23,8 +25,9 @@ const categoryBadge = {
 
 function splitLines(text) {
   return String(text || '')
-    .split(/\r?\n/)
-    .map((s) => s.trim())
+    .replace(/^[\s"']+|[\s"']+$/g, '')
+    .split(/\r?\n|\\n/)
+    .map((s) => s.trim().replace(/^["']+|["']+$/g, ''))
     .filter(Boolean)
 }
 
@@ -40,8 +43,11 @@ function parseLinkLine(line) {
   return { label: s, href: s }
 }
 
-function isHttpUrl(s) {
-  return /^https?:\/\//i.test(String(s || '').trim())
+function normalizeHttpUrl(s) {
+  const raw = String(s || '').trim()
+  if (!raw) return ''
+  if (/^https?:\/\//i.test(raw)) return raw
+  return `https://${raw}`
 }
 
 function rejectionDisplayText(item) {
@@ -53,15 +59,51 @@ function rejectionDisplayText(item) {
   return reason || message
 }
 
+function CopyLinkButton({ href }) {
+  const [copied, setCopied] = useState(false)
+
+  const onCopy = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const value = String(href || '').trim()
+    if (!value) return
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1200)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      title={copied ? 'Copied' : 'Copy link'}
+      aria-label={copied ? 'Copied' : 'Copy link'}
+      onClick={(e) => void onCopy(e)}
+      className="inline-flex size-6 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+    >
+      {copied ? (
+        <TbCheck className="size-3.5 text-emerald-600" aria-hidden />
+      ) : (
+        <TbCopy className="size-3.5" aria-hidden />
+      )}
+    </button>
+  )
+}
+
 function LineList({ label, lines }) {
   if (!lines.length) return null
   return (
     <div className="border-t border-slate-100 pt-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <ul className="mt-2 space-y-2">
+      <ul className="mt-2 space-y-1.5">
         {lines.map((line, i) => {
-          const { label: linkLabel, href } = parseLinkLine(line)
-          if (!isHttpUrl(href)) {
+          const { label: linkLabel, href: rawHref } = parseLinkLine(line)
+          const href = normalizeHttpUrl(rawHref || linkLabel)
+          const copyValue = String(rawHref || linkLabel || '').trim() || href
+          if (!href) {
             return (
               <li key={`${i}-${line}`} className="text-sm text-slate-600">
                 {line}
@@ -69,15 +111,16 @@ function LineList({ label, lines }) {
             )
           }
           return (
-            <li key={`${i}-${href}`}>
+            <li key={`${i}-${href}`} className="flex items-start gap-1.5 text-sm">
               <a
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-medium text-indigo-700 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-900"
+                className="min-w-0 flex-1 break-all font-medium text-indigo-700 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-900"
               >
-                {linkLabel}
+                {linkLabel || href}
               </a>
+              <CopyLinkButton href={copyValue} />
             </li>
           )
         })}
